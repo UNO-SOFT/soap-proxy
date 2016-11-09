@@ -9,6 +9,7 @@ import (
 	"github.com/UNO-SOFT/soap-proxy"
 )
 
+//go:generate protoc --wsdl_out=. -I $GOPATH/src $GOPATH/src/unosoft.hu/ws/bruno/pb/dealer/dealer.proto
 //go:generate protoc --grpcer_out=. -I $GOPATH/src $GOPATH/src/unosoft.hu/ws/bruno/pb/dealer/dealer.proto
 
 func main() {
@@ -28,6 +29,7 @@ func run(addr, endpoint, CA, hostOverride string) error {
 		return err
 	}
 
+	log.Println("Listening on " + addr)
 	return http.ListenAndServe(
 		addr,
 		soapproxy.SOAPHandler{NewClient(cc)},

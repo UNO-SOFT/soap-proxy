@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	context "golang.org/x/net/context"
 
@@ -42,6 +43,11 @@ func (h SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	var opts []grpc.CallOption
 	ctx := context.Background()
+	if u, p, ok := r.BasicAuth(); ok {
+		ctx = grpcer.WithBasicAuth(ctx, u, p)
+	}
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+	defer cancel()
 	out, err := h.Call(soapAction, ctx, inp, opts...)
 	if err != nil {
 		soapError(w, err)
