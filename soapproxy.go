@@ -61,10 +61,11 @@ func (h SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("no input for %q", soapAction), http.StatusBadRequest)
 		return
 	}
-	if err := dec.DecodeElement(&inp, &st); err != nil {
+	if err := dec.DecodeElement(inp, &st); err != nil {
 		soapError(w, errors.Wrapf(err, "Decode into %T", inp))
 		return
 	}
+	log.Printf("Calling %q(%#v)", soapAction, inp)
 
 	var opts []grpc.CallOption
 	ctx := context.Background()
