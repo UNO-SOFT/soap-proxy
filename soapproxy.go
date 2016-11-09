@@ -1,9 +1,12 @@
 package soapproxy
 
 import (
+	"compress/gzip"
+	"encoding/base64"
 	"encoding/xml"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"strings"
 	"time"
@@ -16,12 +19,19 @@ import (
 )
 
 // SOAPHandler is a http.Handler which proxies SOAP requests to the Client.
+// WSDL is served on GET requests.
 type SOAPHandler struct {
 	grpcer.Client
+	WSDL string
 }
 
 func (h SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
+	if r.Method == "GET" {
+		w.Header().Set("Content-Type", "application/xml")
+		io.WriteString(w, h.WSDL)
+		return
+	}
 	soapAction := r.Header.Get("SOAPAction")
 	if i := strings.LastIndex(soapAction, ".proto/"); i >= 0 {
 		soapAction = soapAction[i+7:]
@@ -101,4 +111,19 @@ func findBody(dec *xml.Decoder) (xml.StartElement, error) {
 		}
 	}
 	return st, io.EOF
+}
+
+// Ungzb64 decodes-decompresses the given gzipped-base64-encoded string.
+// Esp. useful for reading the WSDLgzb64 from protoc-gen-wsdl embedded WSDL strings.
+func Ungzb64(s string) string {
+	br := base64.NewDecoder(base64.StdEncoding, strings.NewReader(s))
+	gr, err := gzip.NewReader(br)
+	if err != nil {
+		panic(err)
+	}
+	b, err := ioutil.ReadAll(gr)
+	if err != nil {
+		panic(err)
+	}
+	return string(b)
 }

@@ -2,8 +2,11 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
+	"encoding/base64"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"path"
 	"strings"
 	"sync"
@@ -71,6 +74,10 @@ const wsdlTmpl = xml.Header + `<definitions
 `
 
 func Generate(resp *protoc.CodeGeneratorResponse, req protoc.CodeGeneratorRequest) error {
+	destPkg := req.GetParameter()
+	if destPkg == "" {
+		destPkg = "main"
+	}
 	// Find roots.
 	rootNames := req.GetFileToGenerate()
 	files := req.GetProtoFile()
@@ -160,6 +167,18 @@ func Generate(resp *protoc.CodeGeneratorResponse, req protoc.CodeGeneratorReques
 					&protoc.CodeGeneratorResponse_File{
 						Name:    &destFn,
 						Content: &content,
+					})
+				// also, embed the wsdl
+				goFn := destFn + ".go"
+				goContent := `package ` + destPkg + `
+
+// WSDLgzb64 contains the WSDL, gzipped and base64-encoded.
+// You can easily read it with soapproxy.Ungzb64.
+const WSDLgzb64 = ` + "`" + gzb64(content) + "`\n"
+				resp.File = append(resp.File,
+					&protoc.CodeGeneratorResponse_File{
+						Name:    &goFn,
+						Content: &goContent,
 					})
 				mu.Unlock()
 				return nil
@@ -350,4 +369,23 @@ func PlSqlName(s string) string {
 		v = append(v, r)
 	}
 	return string(v)
+}
+
+func gzb64(s string) string {
+	buf := bufPool.Get().(*bytes.Buffer)
+	defer func() {
+		buf.Reset()
+		bufPool.Put(buf)
+	}()
+	buf.Reset()
+	bw := base64.NewEncoder(base64.StdEncoding, buf)
+	gw := gzip.NewWriter(bw)
+	io.WriteString(gw, s)
+	if err := gw.Close(); err != nil {
+		panic(err)
+	}
+	if err := bw.Close(); err != nil {
+		panic(err)
+	}
+	return buf.String()
 }

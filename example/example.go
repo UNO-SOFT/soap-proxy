@@ -32,6 +32,6 @@ func run(addr, endpoint, CA, hostOverride string) error {
 	log.Println("Listening on " + addr)
 	return http.ListenAndServe(
 		addr,
-		soapproxy.SOAPHandler{NewClient(cc)},
+		soapproxy.SOAPHandler{Client: NewClient(cc), WSDL: soapproxy.Ungzb64(WSDLgzb64)},
 	)
 }

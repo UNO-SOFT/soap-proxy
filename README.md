@@ -6,7 +6,7 @@ with [./protoc-gen-wsdl](protoc-gen-wsdl):
 
 	protoc --wsdl_out=myproxy -I $GOPATH/src $GOPATH/src/unosoft.hu/ws/bruno/pb/dealer/dealer.proto
 
-will create `myproxy/dealer.wsdl`.
+will create `myproxy/dealer.wsdl` and `myproxy/dealer.wsdl.go`.
 
 ## 2. Generate the Client code
 with [github.com/UNO-SOFT/gprcer/protoc-gen-grpcer](protoc-gen-grpcer):
@@ -24,6 +24,6 @@ Then use the `SOAPHandler` in `myproxy/main.go` (see [./example/example.go](exam
 	}
 	http.ListenAndServe(
 		":8080",
-		soapproxy.SOAPHandler{NewClient(cc)},
+		soapproxy.SOAPHandler{Client:NewClient(cc), WSDL:soapproxy.Ungzb64(WSDLgzb64)},
 	)
 
