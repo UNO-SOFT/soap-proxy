@@ -97,6 +97,7 @@ func (h SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			log.Println(err)
 			break
 		}
+		w.Write([]byte{'\n'})
 		if part, err = recv.Recv(); err != nil {
 			if err != io.EOF {
 				log.Println(err)

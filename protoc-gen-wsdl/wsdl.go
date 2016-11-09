@@ -256,7 +256,7 @@ func mkXSDElement(f *descriptor.FieldDescriptorProto) string {
 	if f.GetLabel() == descriptor.FieldDescriptorProto_LABEL_REPEATED {
 		maxOccurs = 999
 	}
-	name := f.GetName()
+	name := CamelCase(f.GetName())
 	typ := mkTypeName(f.GetTypeName())
 	return fmt.Sprintf(
 		`<xsd:element minOccurs="0" nillable="true" maxOccurs="%d" name="%s" type="%s"/>`,
@@ -270,7 +270,7 @@ func mkTypeName(s string) string {
 		return s
 	}
 	if i := strings.IndexByte(s, '.'); i >= 0 {
-		return s[:i] + "__" + (s[i+1:])
+		return CamelCase(s[:i]) + "_" + (s[i+1:])
 	}
 	if 'A' <= s[0] && s[0] <= 'Z' {
 		return (s)
