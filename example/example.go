@@ -29,6 +29,9 @@ func run(addr, endpoint, CA, hostOverride string) error {
 		return err
 	}
 
+	if addr == "" {
+		addr = ":8080"
+	}
 	log.Println("Listening on " + addr)
 	return http.ListenAndServe(
 		addr,

@@ -143,6 +143,7 @@ func Generate(resp *protoc.CodeGeneratorResponse, req protoc.CodeGeneratorReques
 		for _, svc := range root.GetService() {
 			grp.Go(func() error {
 				data := whole{
+					Package:  PlSqlName(svc.GetName()),
 					TargetNS: "http://" + pkg + "/" + svc.GetName() + "/",
 					TypesNS:  "http://" + pkg + "/" + svc.GetName() + "_types/",
 					Types:    msgTypes,
