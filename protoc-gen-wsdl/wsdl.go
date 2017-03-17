@@ -1,4 +1,4 @@
-// Copyright 2017 Tam·s Gul·csi
+// Copyright 2017 Tam√°s Gul√°csi
 //
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,6 +22,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"log"
 	"path"
 	"strings"
 	"sync"
@@ -273,6 +274,12 @@ func mkXSDElement(f *descriptor.FieldDescriptorProto) string {
 	}
 	name := CamelCase(f.GetName())
 	typ := mkTypeName(f.GetTypeName())
+	if typ == "" {
+		typ = xsdType(f.GetType())
+		if typ == "" {
+			log.Printf("no type name for %s (%s)", f.GetTypeName(), f)
+		}
+	}
 	return fmt.Sprintf(
 		`<xsd:element minOccurs="0" nillable="true" maxOccurs="%d" name="%s" type="%s"/>`,
 		maxOccurs, name, typ,
@@ -405,3 +412,5 @@ func gzb64(s string) string {
 	}
 	return buf.String()
 }
+
+// vim: set fileencoding=utf-8 noet:

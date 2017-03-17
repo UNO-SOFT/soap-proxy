@@ -1,4 +1,4 @@
-// Copyright 2017 Tam·s Gul·csi
+// Copyright 2017 Tam√°s Gul√°csi
 //
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
@@ -188,3 +188,5 @@ func Ungzb64(s string) string {
 	}
 	return string(b)
 }
+
+// vim: set fileencoding=utf-8 noet:

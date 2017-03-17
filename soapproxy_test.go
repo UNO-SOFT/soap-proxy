@@ -1,4 +1,4 @@
-// Copyright 2017 Tam·s Gul·csi
+// Copyright 2017 Tam√°s Gul√°csi
 //
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
@@ -64,3 +64,5 @@ func TestXMLDecode(t *testing.T) {
 		t.Errorf("empty struct: %#v", inp)
 	}
 }
+
+// vim: set fileencoding=utf-8 noet:
