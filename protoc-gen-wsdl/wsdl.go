@@ -377,8 +377,8 @@ func CamelCase(text string) string {
 	)
 }
 
-// PlsqlName reverses oracall.goName
-func PlSqlName(s string) string {
+// UnCamelCase reverses CamelCase
+func UnCamelCase(s string) string {
 	v := make([]rune, 0, len(s))
 	for i, r := range s {
 		if i == 0 {
