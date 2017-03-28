@@ -18,6 +18,7 @@ package soapproxy
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/base64"
 	"encoding/xml"
 	"fmt"
@@ -27,8 +28,6 @@ import (
 	"net/http"
 	"strings"
 	"time"
-
-	context "golang.org/x/net/context"
 
 	"github.com/UNO-SOFT/grpcer"
 	"github.com/pkg/errors"
