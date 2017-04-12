@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions
+	name="MySrvc"
+	targetNamespace="http://mysrvc/mysrvc.proto/MySrvc/"
+	xmlns:tns="http://mysrvc/mysrvc.proto/MySrvc/"
+	xmlns:types="http://mysrvc/mysrvc.proto/MySrvc_types/"
+	xmlns="http://schemas.xmlsoap.org/wsdl/"
+	xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
+	xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/"
+	xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/"
+	xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <types>
+    <xsd:schema elementFormDefault="qualified" targetNamespace="http://mysrvc/mysrvc.proto/MySrvc/">
+      <xsd:element name="exception">
+        <xsd:complexType>
+          <xsd:sequence>
+            <xsd:element name="type" nillable="true" type="xsd:string"/>
+            <xsd:element name="message" nillable="true" type="xsd:string"/>
+            <xsd:element name="traceback" nillable="true" type="xsd:string"/>
+          </xsd:sequence>
+        </xsd:complexType>
+      </xsd:element>
+      
+	    
+<xsd:element name="Mysrvc_Contracts_Input">
+  <xsd:complexType>
+    <xsd:all>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="PBazon" type="xsd:int"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="PSzerzAzon" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="PModkod" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="PKotvenyszam" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="PAjanlatsorszam" type="xsd:double"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="PUgyfelnev" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="PTelepules" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="PTagAzon" type="xsd:int"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="PUkTorzsszam" type="xsd:int"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="PRendszam" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="PKockhelyIrszam" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="PKockhelyKtid" type="xsd:int"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="PElozmenyBizt" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="PFlottaAzon" type="xsd:int"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="PFlottaVonalkod" type="xsd:int"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="PLimit" type="xsd:int"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="POffset" type="xsd:int"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="POrder" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="PCount" type="xsd:string"/>
+	
+    </xsd:all>
+  </xsd:complexType>
+</xsd:element>
+
+	  
+	    
+<xsd:element name="Mysrvc_ContractsRecTyp_Bruno">
+  <xsd:complexType>
+    <xsd:all>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="RowNum" type="xsd:int"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="ContractNumber" type="xsd:double"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="MemberCode" type="xsd:double"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Modkod" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Modrnev" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="BidId" type="xsd:double"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="ContractOldId" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="ContractStatus" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="ContractStatusName" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="ContractStatusShort" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="ContractRecordingDate" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="ContractBtkezd" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="ContractBeginDate" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="ContractDeletionValidFrom" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="ContractBalanceDate" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="ContractFutureBalanceDate" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="ContractYearlyPrice" type="xsd:double"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="ContractAnniversary" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="ContractBalance" type="xsd:double"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="ElviDijhatralek" type="xsd:double"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="ClientName" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="ClientCode" type="xsd:double"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="OwnerCode" type="xsd:double"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="CarPlate" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="CarCategory" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="CarMake" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="CarModel" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="DealerCode" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="DealerName" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="KockhelyIrszam" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="KockhelyTelepules" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="KockhelyCim" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="ClientPpid" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="ClientCity" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="ElozmenybiztKod" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="ElozmenybiztNev" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="FlottaAzon" type="xsd:double"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="FlottaVonalkod" type="xsd:double"/>
+	
+    </xsd:all>
+  </xsd:complexType>
+</xsd:element>
+
+<xsd:element name="Mysrvc_Contracts_Output">
+  <xsd:complexType>
+    <xsd:all>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="PMaradt" type="xsd:int"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="PHibaKod" type="xsd:int"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="PHibaSzov" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="999" name="Ret" type="Mysrvc_ContractsRecTyp_Bruno"/>
+	
+    </xsd:all>
+  </xsd:complexType>
+</xsd:element>
+
+	  
+	    
+<xsd:element name="Mysrvc_LastMod_Input">
+  <xsd:complexType>
+    <xsd:all>
+	
+    </xsd:all>
+  </xsd:complexType>
+</xsd:element>
+
+	  
+	    
+<xsd:element name="Mysrvc_LastMod_Output">
+  <xsd:complexType>
+    <xsd:all>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Ret" type="xsd:string"/>
+	
+    </xsd:all>
+  </xsd:complexType>
+</xsd:element>
+
+	  
+	</xsd:schema>
+  </types>
+  <message name="error">
+    <part element="types:exception" name="error"/>
+  </message>
+  <portType name="MySrvc">
+    
+    <operation name="MySrvc_LastMod">
+      <input message="tns:Mysrvc_LastMod_Input"/>
+      <output message="tns:Mysrvc_LastMod_Output"/>
+      <fault message="tns:error" name="error"/>
+    </operation>
+	
+    <operation name="MySrvc_Contracts">
+      <input message="tns:Mysrvc_Contracts_Input"/>
+      <output message="tns:Mysrvc_Contracts_Output"/>
+      <fault message="tns:error" name="error"/>
+    </operation>
+	
+  </portType>
+  <binding name="MySrvc_soap" type="tns:MySrvc">
+    <soap:binding transport="http://schemas.xmlsoap.org/soap/http"/>
+	<operation name="MySrvc_LastMod">
+      <soap:operation soapAction="http://mysrvc/mysrvc.proto/MySrvc/MySrvc_LastMod" style="document"/>
+      <input><soap:body use="literal"/></input>
+      <output><soap:body use="literal"/></output>
+      <fault name="error"><soap:fault name="error" use="literal"/></fault>
+    </operation><operation name="MySrvc_Contracts">
+      <soap:operation soapAction="http://mysrvc/mysrvc.proto/MySrvc/MySrvc_Contracts" style="document"/>
+      <input><soap:body use="literal"/></input>
+      <output><soap:body use="literal"/></output>
+      <fault name="error"><soap:fault name="error" use="literal"/></fault>
+    </operation>
+  </binding>
+  <service name="MySrvc__service">
+    <port binding="tns:MySrvc_soap" name="web">
+      <soap:address location="http://localhost:12469/portal/"/>
+    </port>
+  </service>
+</definitions>

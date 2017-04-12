@@ -1,0 +1,158 @@
+syntax = "proto3";
+package mysrvc;
+import "google/api/annotations.proto";
+
+message LastMod_Input {
+}
+
+message LastMod_Output {
+	// VARCHAR2(32767)
+	string ret = 1;
+}
+
+message Contracts_Input {
+	// INTEGER(10)
+	sint32 p_bazon = 1;
+	// VARCHAR2(32767)
+	string p_szerz_azon = 2;
+	// VARCHAR2(32767)
+	string p_modkod = 3;
+	// VARCHAR2(32767)
+	string p_kotvenyszam = 4;
+	// NUMBER
+	double p_ajanlatsorszam = 5;
+	// VARCHAR2(32767)
+	string p_ugyfelnev = 6;
+	// VARCHAR2(32767)
+	string p_telepules = 7;
+	// INTEGER(10)
+	sint32 p_tag_azon = 8;
+	// INTEGER(10)
+	sint32 p_uk_torzsszam = 9;
+	// VARCHAR2(32767)
+	string p_rendszam = 10;
+	// VARCHAR2(32767)
+	string p_kockhely_irszam = 11;
+	// INTEGER(10)
+	sint32 p_kockhely_ktid = 12;
+	// VARCHAR2(32767)
+	string p_elozmeny_bizt = 13;
+	// INTEGER(10)
+	sint32 p_flotta_azon = 14;
+	// INTEGER(10)
+	sint32 p_flotta_vonalkod = 15;
+	// INTEGER(10)
+	sint32 p_limit = 16;
+	// INTEGER(10)
+	sint32 p_offset = 17;
+	// VARCHAR2(32767)
+	string p_order = 18;
+	// VARCHAR2(32767)
+	string p_count = 19;
+}
+
+message Contracts_Output {
+	// INTEGER(10)
+	sint32 p_maradt = 1;
+	// INTEGER(10)
+	sint32 p_hiba_kod = 2;
+	// VARCHAR2(32767)
+	string p_hiba_szov = 3;
+	repeated ContractsRecTyp_Bruno ret = 4;
+}
+
+message ContractsRecTyp_Bruno {
+	// INTEGER(10)
+	sint32 row_num = 1;
+	// NUMBER(9)
+	double contract_number = 2;
+	// NUMBER(9)
+	double member_code = 3;
+	// VARCHAR2(6)
+	string modkod = 4;
+	// VARCHAR2(8)
+	string modrnev = 5;
+	// NUMBER(9)
+	double bid_id = 6;
+	// VARCHAR2(10)
+	string contract_old_id = 7;
+	// VARCHAR2(2)
+	string contract_status = 8;
+	// VARCHAR2(80)
+	string contract_status_name = 9;
+	// VARCHAR2(40)
+	string contract_status_short = 10;
+	// DATE
+	string contract_recording_date = 11;
+	// DATE
+	string contract_btkezd = 12;
+	// DATE
+	string contract_begin_date = 13;
+	// DATE
+	string contract_deletion_valid_from = 14;
+	// DATE
+	string contract_balance_date = 15;
+	// DATE
+	string contract_future_balance_date = 16;
+	// NUMBER(12, 2)
+	double contract_yearly_price = 17;
+	// VARCHAR2(5)
+	string contract_anniversary = 18;
+	// NUMBER(12, 2)
+	double contract_balance = 19;
+	// NUMBER(12, 2)
+	double elvi_dijhatralek = 20;
+	// VARCHAR2(40)
+	string client_name = 21;
+	// NUMBER(9)
+	double client_code = 22;
+	// NUMBER(9)
+	double owner_code = 23;
+	// VARCHAR2(11)
+	string car_plate = 24;
+	// VARCHAR2(40)
+	string car_category = 25;
+	// VARCHAR2(40)
+	string car_make = 26;
+	// VARCHAR2(40)
+	string car_model = 27;
+	// VARCHAR2(10)
+	string dealer_code = 28;
+	// VARCHAR2(40)
+	string dealer_name = 29;
+	// VARCHAR2(5)
+	string kockhely_irszam = 30;
+	// VARCHAR2(25)
+	string kockhely_telepules = 31;
+	// VARCHAR2(255)
+	string kockhely_cim = 32;
+	// VARCHAR2(5)
+	string client_ppid = 33;
+	// VARCHAR2(25)
+	string client_city = 34;
+	// VARCHAR2(2)
+	string elozmenybizt_kod = 35;
+	// VARCHAR2(40)
+	string elozmenybizt_nev = 36;
+	// NUMBER(9)
+	double flotta_azon = 37;
+	// NUMBER(9)
+	double flotta_vonalkod = 38;
+}
+
+
+service MySrvc {
+	rpc MySrvc_LastMod ( LastMod_Input) returns ( LastMod_Output) {
+    option (google.api.http) = {
+		post: "/mysrvc/v1/MySrvc_LastMod"
+		body: "*"
+	};
+}
+	rpc MySrvc_Contracts ( Contracts_Input) returns (stream Contracts_Output) {
+    option (google.api.http) = {
+		post: "/mysrvc/v1/MySrvc_Contracts"
+		body: "*"
+	};
+}
+
+}

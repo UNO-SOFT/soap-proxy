@@ -9,8 +9,12 @@ import (
 	"github.com/UNO-SOFT/soap-proxy"
 )
 
-//go:generate protoc --wsdl_out=. -I $GOPATH/src $GOPATH/src/unosoft.hu/ws/bruno/pb/dealer/dealer.proto
-//go:generate protoc --grpcer_out=. -I $GOPATH/src $GOPATH/src/unosoft.hu/ws/bruno/pb/dealer/dealer.proto
+//go:generate go install -v github.com/UNO-SOFT/grpcer/protoc-gen-grpcer
+//go:generate go install -v github.com/gogo/protobuf/protoc-gen-gofast
+
+//go:generate protoc --wsdl_out=mysrvc:mysrvc/ -I . mysrvc/mysrvc.proto
+//go:generate protoc --gofast_out=grpc:. -I $GOPATH/src -I . mysrvc/mysrvc.proto
+//go:generate protoc --grpcer_out=main:. -I $GOPATH/src -I . $GOPATH/src/github.com/UNO-SOFT/soap-proxy/example/mysrvc/mysrvc.proto
 
 func main() {
 	flagEndpoint := flag.String("endpoint", "www.unosoft.hu:12443", "gRPC endpoint")
@@ -35,6 +39,9 @@ func run(addr, endpoint, CA, hostOverride string) error {
 	log.Println("Listening on " + addr)
 	return http.ListenAndServe(
 		addr,
-		soapproxy.SOAPHandler{Client: NewClient(cc), WSDL: soapproxy.Ungzb64(WSDLgzb64)},
+		soapproxy.SOAPHandler{
+			Client: NewClient(cc),
+			WSDL:   soapproxy.Ungzb64(WSDLgzb64),
+		},
 	)
 }
