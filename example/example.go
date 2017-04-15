@@ -7,13 +7,15 @@ import (
 
 	"github.com/UNO-SOFT/grpcer"
 	"github.com/UNO-SOFT/soap-proxy"
+
+	pb "github.com/UNO-SOFT/soap-proxy/example/mysrvc"
 )
 
 //go:generate go install -v github.com/UNO-SOFT/grpcer/protoc-gen-grpcer
 //go:generate go install -v github.com/gogo/protobuf/protoc-gen-gofast
 
 //go:generate protoc --wsdl_out=mysrvc:mysrvc/ -I . mysrvc/mysrvc.proto
-//go:generate protoc --gofast_out=grpc:. -I $GOPATH/src -I . mysrvc/mysrvc.proto
+//go:generate protoc --gofast_out=plugins=grpc:. -I $GOPATH/src -I . mysrvc/mysrvc.proto
 //go:generate protoc --grpcer_out=main:. -I $GOPATH/src -I . $GOPATH/src/github.com/UNO-SOFT/soap-proxy/example/mysrvc/mysrvc.proto
 
 func main() {
@@ -41,7 +43,7 @@ func run(addr, endpoint, CA, hostOverride string) error {
 		addr,
 		soapproxy.SOAPHandler{
 			Client: NewClient(cc),
-			WSDL:   soapproxy.Ungzb64(WSDLgzb64),
+			WSDL:   soapproxy.Ungzb64(pb.WSDLgzb64),
 		},
 	)
 }

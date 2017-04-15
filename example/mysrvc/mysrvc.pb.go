@@ -22,6 +22,11 @@ import fmt "fmt"
 import math "math"
 import _ "google.golang.org/genproto/googleapis/api/annotations"
 
+import (
+	context "golang.org/x/net/context"
+	grpc "google.golang.org/grpc"
+)
+
 import io "io"
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -639,6 +644,140 @@ func init() {
 	proto.RegisterType((*Contracts_Output)(nil), "mysrvc.Contracts_Output")
 	proto.RegisterType((*ContractsRecTyp_Bruno)(nil), "mysrvc.ContractsRecTyp_Bruno")
 }
+
+// Reference imports to suppress errors if they are not otherwise used.
+var _ context.Context
+var _ grpc.ClientConn
+
+// This is a compile-time assertion to ensure that this generated file
+// is compatible with the grpc package it is being compiled against.
+const _ = grpc.SupportPackageIsVersion4
+
+// Client API for MySrvc service
+
+type MySrvcClient interface {
+	MySrvc_LastMod(ctx context.Context, in *LastMod_Input, opts ...grpc.CallOption) (*LastMod_Output, error)
+	MySrvc_Contracts(ctx context.Context, in *Contracts_Input, opts ...grpc.CallOption) (MySrvc_MySrvc_ContractsClient, error)
+}
+
+type mySrvcClient struct {
+	cc *grpc.ClientConn
+}
+
+func NewMySrvcClient(cc *grpc.ClientConn) MySrvcClient {
+	return &mySrvcClient{cc}
+}
+
+func (c *mySrvcClient) MySrvc_LastMod(ctx context.Context, in *LastMod_Input, opts ...grpc.CallOption) (*LastMod_Output, error) {
+	out := new(LastMod_Output)
+	err := grpc.Invoke(ctx, "/mysrvc.MySrvc/MySrvc_LastMod", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mySrvcClient) MySrvc_Contracts(ctx context.Context, in *Contracts_Input, opts ...grpc.CallOption) (MySrvc_MySrvc_ContractsClient, error) {
+	stream, err := grpc.NewClientStream(ctx, &_MySrvc_serviceDesc.Streams[0], c.cc, "/mysrvc.MySrvc/MySrvc_Contracts", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &mySrvcMySrvc_ContractsClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type MySrvc_MySrvc_ContractsClient interface {
+	Recv() (*Contracts_Output, error)
+	grpc.ClientStream
+}
+
+type mySrvcMySrvc_ContractsClient struct {
+	grpc.ClientStream
+}
+
+func (x *mySrvcMySrvc_ContractsClient) Recv() (*Contracts_Output, error) {
+	m := new(Contracts_Output)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+// Server API for MySrvc service
+
+type MySrvcServer interface {
+	MySrvc_LastMod(context.Context, *LastMod_Input) (*LastMod_Output, error)
+	MySrvc_Contracts(*Contracts_Input, MySrvc_MySrvc_ContractsServer) error
+}
+
+func RegisterMySrvcServer(s *grpc.Server, srv MySrvcServer) {
+	s.RegisterService(&_MySrvc_serviceDesc, srv)
+}
+
+func _MySrvc_MySrvc_LastMod_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LastMod_Input)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MySrvcServer).MySrvc_LastMod(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mysrvc.MySrvc/MySrvc_LastMod",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MySrvcServer).MySrvc_LastMod(ctx, req.(*LastMod_Input))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MySrvc_MySrvc_Contracts_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(Contracts_Input)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(MySrvcServer).MySrvc_Contracts(m, &mySrvcMySrvc_ContractsServer{stream})
+}
+
+type MySrvc_MySrvc_ContractsServer interface {
+	Send(*Contracts_Output) error
+	grpc.ServerStream
+}
+
+type mySrvcMySrvc_ContractsServer struct {
+	grpc.ServerStream
+}
+
+func (x *mySrvcMySrvc_ContractsServer) Send(m *Contracts_Output) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+var _MySrvc_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "mysrvc.MySrvc",
+	HandlerType: (*MySrvcServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "MySrvc_LastMod",
+			Handler:    _MySrvc_MySrvc_LastMod_Handler,
+		},
+	},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "MySrvc_Contracts",
+			Handler:       _MySrvc_MySrvc_Contracts_Handler,
+			ServerStreams: true,
+		},
+	},
+	Metadata: "mysrvc/mysrvc.proto",
+}
+
 func (m *LastMod_Input) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
