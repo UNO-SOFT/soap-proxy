@@ -35,24 +35,24 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const wsdlTmpl = xml.Header + `<wsdl:definitions
+const wsdlTmpl = xml.Header + `<definitions
     name="{{.Package}}"
     targetNamespace="{{.TargetNS}}"
+    xmlns="http://schemas.xmlsoap.org/wsdl/"
     xmlns:tns="{{.TargetNS}}"
     xmlns:types="{{.TypesNS}}"
-    xmlns="http://schemas.xmlsoap.org/wsdl/"
     xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
     xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/"
     xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/"
     xmlns:xsd="http://www.w3.org/2001/XMLSchema">
-  <wsdl:documentation>
+  <documentation>
     Service: {{.Package}}
     Version: {{.Version}}
     Generated: {{.GeneratedAt}}
     Owner: {{.Owner}}
-  </wsdl:documentation>
-  <wsdl:types>
-    <xsd:schema elementFormDefault="qualified" targetNamespace="{{.TargetNS}}">
+  </documentation>
+  <types>
+    <xsd:schema elementFormDefault="qualified" targetNamespace="{{.TypesNS}}">
       <xsd:element name="exception">
         <xsd:complexType>
           <xsd:sequence>
@@ -66,38 +66,47 @@ const wsdlTmpl = xml.Header + `<wsdl:definitions
         {{mkType $k $m}}
       {{end}}
     </xsd:schema>
-  </wsdl:types>
-  <wsdl:message name="error">
-    <wsdl:part element="types:exception" name="error"/>
-  </wsdl:message>
+  </types>
+  <message name="error">
+    <part element="types:exception" name="error"/>
+  </message>
   {{range .GetMethod}}
-  <wsdl:message name="{{mkTypeName .GetInputType}}" />
-  <wsdl:message name="{{mkTypeName .GetOutputType}}" />
+  {{$input := mkTypeName .GetInputType}}
+  {{$output := mkTypeName .GetOutputType}}
+  <message name="{{$input}}">
+    <part element="types:{{$input}}" name="{{$input}}" />
+  </message>
+  <message name="{{$output}}">
+    <part element="types:{{$output}}" name="{{$output}}" />
+  </message>
   {{end}}
-  <wsdl:portType name="{{.Package}}">
+  <portType name="{{.Package}}">
     {{range .GetMethod}}
-    <wsdl:operation name="{{.GetName}}">
-      <wsdl:input message="tns:{{mkTypeName .GetInputType}}"/>
-      <wsdl:output message="tns:{{mkTypeName .GetOutputType}}"/>
-      <wsdl:fault message="tns:error" name="error"/>
-    </wsdl:operation>
-    {{end}}
-  </wsdl:portType>
-  <wsdl:binding name="{{.Package}}_soap" type="tns:{{.Package}}">
+    <operation name="{{.GetName}}">
+      <input message="tns:{{mkTypeName .GetInputType}}"/>
+      <output message="tns:{{mkTypeName .GetOutputType}}"/>
+      <fault message="tns:error" name="error"/>
+    </operation>{{end}}
+  </portType>
+  <binding name="{{.Package}}_soap" type="tns:{{.Package}}">
     <soap:binding transport="http://schemas.xmlsoap.org/soap/http"/>
-    {{range .GetMethod}}<wsdl:operation name="{{.Name}}">
-      <soap:operation soapAction="{{$.TargetNS}}{{.GetName}}" style="document"/>
+    {{range .GetMethod}}
+    <operation name="{{.Name}}">
+      <wsdl:documentation></wsdl:documentation>
+      <soap:operation soapAction="{{$.TargetNS}}{{.GetName}}" style="document" />
       <input><soap:body use="literal"/></input>
       <output><soap:body use="literal"/></output>
       <fault name="error"><soap:fault name="error" use="literal"/></fault>
-    </wsdl:operation>{{end}}
-  </wsdl:binding>
-  <wsdl:service name="{{.Package}}__service">
-    <wsdl:port binding="tns:{{.Package}}_soap" name="web">
-      <soap:address location="http://localhost:12469/portal/"/>
-    </wsdl:port>
-  </wsdl:service>
-</wsdl:definitions>
+    </operation>{{end}}
+  </binding>
+  <service name="{{.Package}}__service">
+    <port binding="tns:{{.Package}}_soap" name="{{.Package}}">
+      {{range .Locations}}
+      <soap:address location="{{.}}"/>
+      {{end}}
+    </port>
+  </service>
+</definitions>
 `
 
 func Generate(resp *protoc.CodeGeneratorResponse, req protoc.CodeGeneratorRequest) error {
@@ -162,6 +171,7 @@ func Generate(resp *protoc.CodeGeneratorResponse, req protoc.CodeGeneratorReques
 		Types             map[string]*descriptor.DescriptorProto
 		GeneratedAt       time.Time
 		Version, Owner    string
+		Locations         []string
 	}
 
 	now := time.Now()
@@ -223,20 +233,32 @@ const WSDLgzb64 = ` + "`" + gzb64(content) + "`\n"
 
 var bufPool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]byte, 0, 4096)) }}
 
-var typeTemplate = template.Must(
+var elementTypeTemplate = template.Must(
 	template.New("type").
 		Funcs(template.FuncMap{
 			"mkXSDElement": mkXSDElement,
 		}).
-		Parse(`
-<xsd:element name="{{.Name}}">
+		Parse(`<xsd:element name="{{.Name}}">
   <xsd:complexType>
-    <xsd:all>
+    <xsd:sequence>
 	{{range .Fields}}{{mkXSDElement .}}
 	{{end}}
-    </xsd:all>
+    </xsd:sequence>
   </xsd:complexType>
 </xsd:element>
+`))
+
+var xsdTypeTemplate = template.Must(
+	template.New("type").
+		Funcs(template.FuncMap{
+			"mkXSDElement": mkXSDElement,
+		}).
+		Parse(`<xsd:complexType name="{{.Name}}">
+  <xsd:sequence>
+  {{range .Fields}}{{mkXSDElement .}}
+  {{end}}
+  </xsd:sequence>
+</xsd:complexType>
 `))
 
 type typer struct {
@@ -251,6 +273,7 @@ func (t typer) mkType(fullName string, m *descriptor.DescriptorProto) string {
 		bufPool.Put(buf)
 	}()
 
+	// <BrunoLevelek_Output><PLevelek><SzerzAzon>1</SzerzAzon><Tipus></Tipus><Url></Url><Datum></Datum></PLevelek><PLevelek><SzerzAzon>2</SzerzAzon><Tipus>f</Tipus><Url></Url><Datum></Datum></PLevelek><PHibaKod>0</PHibaKod><PHibaSzov></PHibaSzov></BrunoLevelek_Output>Hello, playground
 	subTypes := make(map[string][]*descriptor.FieldDescriptorProto)
 	for _, f := range m.GetField() {
 		tn := mkTypeName(f.GetTypeName())
@@ -264,21 +287,21 @@ func (t typer) mkType(fullName string, m *descriptor.DescriptorProto) string {
 		Name   string
 		Fields []*descriptor.FieldDescriptorProto
 	}
-	for k, vv := range subTypes {
-		if err := typeTemplate.Execute(buf,
-			Fields{Name: k, Fields: vv},
-		); err != nil {
-			panic(err)
-		}
-	}
 	if fullName == "" {
 		fullName = m.GetName()
 	}
 	typName := mkTypeName(fullName)
-	if err := typeTemplate.Execute(buf,
+	if err := elementTypeTemplate.Execute(buf,
 		Fields{Name: typName, Fields: m.GetField()},
 	); err != nil {
 		panic(err)
+	}
+	for k, vv := range subTypes {
+		if err := xsdTypeTemplate.Execute(buf,
+			Fields{Name: k, Fields: vv},
+		); err != nil {
+			panic(err)
+		}
 	}
 	return buf.String()
 }
@@ -296,7 +319,7 @@ func mkXSDElement(f *descriptor.FieldDescriptorProto) string {
 			log.Printf("no type name for %s (%s)", f.GetTypeName(), f)
 		}
 	} else {
-		typ = "tns:" + typ
+		typ = "types:" + typ
 	}
 	return fmt.Sprintf(
 		`<xsd:element minOccurs="0" nillable="true" maxOccurs="%d" name="%s" type="%s"/>`,
@@ -309,11 +332,14 @@ func mkTypeName(s string) string {
 	if s == "" {
 		return s
 	}
-	if i := strings.IndexByte(s, '.'); i >= 0 {
-		return CamelCase(s[:i]) + "_" + (s[i+1:])
+	i := strings.IndexByte(s, '.')
+	if i < 0 {
+		return s
 	}
-	if 'A' <= s[0] && s[0] <= 'Z' {
-		return (s)
+	s = CamelCase(s[:i]) + "_" + (s[i+1:])
+	i = strings.IndexByte(s, '_')
+	if strings.HasPrefix(s[i+1:], s[:i+1]) {
+		s = s[i+1:]
 	}
 	return s
 }
