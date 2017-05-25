@@ -27,6 +27,7 @@ import (
 	"strings"
 	"sync"
 	"text/template"
+	"time"
 	"unicode"
 
 	"github.com/golang/protobuf/protoc-gen-go/descriptor"
@@ -34,17 +35,23 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const wsdlTmpl = xml.Header + `<definitions
-	name="{{.Package}}"
-	targetNamespace="{{.TargetNS}}"
-	xmlns:tns="{{.TargetNS}}"
-	xmlns:types="{{.TypesNS}}"
-	xmlns="http://schemas.xmlsoap.org/wsdl/"
-	xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
-	xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/"
-	xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/"
-	xmlns:xsd="http://www.w3.org/2001/XMLSchema">
-  <types>
+const wsdlTmpl = xml.Header + `<wsdl:definitions
+    name="{{.Package}}"
+    targetNamespace="{{.TargetNS}}"
+    xmlns:tns="{{.TargetNS}}"
+    xmlns:types="{{.TypesNS}}"
+    xmlns="http://schemas.xmlsoap.org/wsdl/"
+    xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
+    xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/"
+    xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <wsdl:documentation>
+    Service: {{.Package}}
+    Version: {{.Version}}
+    Generated: {{.GeneratedAt}}
+    Owner: {{.Owner}}
+  </wsdl:documentation>
+  <wsdl:types>
     <xsd:schema elementFormDefault="qualified" targetNamespace="{{.TargetNS}}">
       <xsd:element name="exception">
         <xsd:complexType>
@@ -56,37 +63,41 @@ const wsdlTmpl = xml.Header + `<definitions
         </xsd:complexType>
       </xsd:element>
       {{range $k, $m := .Types}}
-	    {{mkType $k $m}}
-	  {{end}}
-	</xsd:schema>
-  </types>
-  <message name="error">
-    <part element="types:exception" name="error"/>
-  </message>
-  <portType name="{{.Package}}">
+        {{mkType $k $m}}
+      {{end}}
+    </xsd:schema>
+  </wsdl:types>
+  <wsdl:message name="error">
+    <wsdl:part element="types:exception" name="error"/>
+  </wsdl:message>
+  {{range .GetMethod}}
+  <wsdl:message name="{{mkTypeName .GetInputType}}" />
+  <wsdl:message name="{{mkTypeName .GetOutputType}}" />
+  {{end}}
+  <wsdl:portType name="{{.Package}}">
     {{range .GetMethod}}
-    <operation name="{{.GetName}}">
-      <input message="tns:{{mkTypeName .GetInputType}}"/>
-      <output message="tns:{{mkTypeName .GetOutputType}}"/>
-      <fault message="tns:error" name="error"/>
-    </operation>
-	{{end}}
-  </portType>
-  <binding name="{{.Package}}_soap" type="tns:{{.Package}}">
+    <wsdl:operation name="{{.GetName}}">
+      <wsdl:input message="tns:{{mkTypeName .GetInputType}}"/>
+      <wsdl:output message="tns:{{mkTypeName .GetOutputType}}"/>
+      <wsdl:fault message="tns:error" name="error"/>
+    </wsdl:operation>
+    {{end}}
+  </wsdl:portType>
+  <wsdl:binding name="{{.Package}}_soap" type="tns:{{.Package}}">
     <soap:binding transport="http://schemas.xmlsoap.org/soap/http"/>
-	{{range .GetMethod}}<operation name="{{.Name}}">
+    {{range .GetMethod}}<wsdl:operation name="{{.Name}}">
       <soap:operation soapAction="{{$.TargetNS}}{{.GetName}}" style="document"/>
       <input><soap:body use="literal"/></input>
       <output><soap:body use="literal"/></output>
       <fault name="error"><soap:fault name="error" use="literal"/></fault>
-    </operation>{{end}}
-  </binding>
-  <service name="{{.Package}}__service">
-    <port binding="tns:{{.Package}}_soap" name="web">
+    </wsdl:operation>{{end}}
+  </wsdl:binding>
+  <wsdl:service name="{{.Package}}__service">
+    <wsdl:port binding="tns:{{.Package}}_soap" name="web">
       <soap:address location="http://localhost:12469/portal/"/>
-    </port>
-  </service>
-</definitions>
+    </wsdl:port>
+  </wsdl:service>
+</wsdl:definitions>
 `
 
 func Generate(resp *protoc.CodeGeneratorResponse, req protoc.CodeGeneratorRequest) error {
@@ -146,10 +157,14 @@ func Generate(resp *protoc.CodeGeneratorResponse, req protoc.CodeGeneratorReques
 	// All other types are from imported dependencies, recursively.
 	type whole struct {
 		*descriptor.ServiceDescriptorProto
-		Package, TargetNS, TypesNS string
-		Types                      map[string]*descriptor.DescriptorProto
+		Package           string
+		TargetNS, TypesNS string
+		Types             map[string]*descriptor.DescriptorProto
+		GeneratedAt       time.Time
+		Version, Owner    string
 	}
 
+	now := time.Now()
 	var grp errgroup.Group
 	var mu sync.Mutex
 	resp.File = make([]*protoc.CodeGeneratorResponse_File, 0, len(roots))
@@ -165,6 +180,7 @@ func Generate(resp *protoc.CodeGeneratorResponse, req protoc.CodeGeneratorReques
 					Types:    msgTypes,
 
 					ServiceDescriptorProto: svc,
+					GeneratedAt:            now,
 				}
 				destFn := strings.TrimSuffix(path.Base(pkg), ".proto") + ".wsdl"
 				buf := bufPool.Get().(*bytes.Buffer)
@@ -279,6 +295,8 @@ func mkXSDElement(f *descriptor.FieldDescriptorProto) string {
 		if typ == "" {
 			log.Printf("no type name for %s (%s)", f.GetTypeName(), f)
 		}
+	} else {
+		typ = "tns:" + typ
 	}
 	return fmt.Sprintf(
 		`<xsd:element minOccurs="0" nillable="true" maxOccurs="%d" name="%s" type="%s"/>`,
