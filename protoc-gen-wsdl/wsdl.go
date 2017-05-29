@@ -35,6 +35,8 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+var IsHidden = func(s string) bool { return strings.HasSuffix(s, "_hidden") }
+
 const wsdlTmpl = xml.Header + `<definitions
     name="{{.Package}}"
     targetNamespace="{{.TargetNS}}"
@@ -101,6 +103,7 @@ const wsdlTmpl = xml.Header + `<definitions
   </binding>
   <service name="{{.Package}}__service">
     <port binding="tns:{{.Package}}_soap" name="{{.Package}}">
+	  <!--location-->
       {{range .Locations}}
       <soap:address location="{{.}}"/>
       {{end}}
@@ -291,19 +294,36 @@ func (t typer) mkType(fullName string, m *descriptor.DescriptorProto) string {
 		fullName = m.GetName()
 	}
 	typName := mkTypeName(fullName)
-	if err := elementTypeTemplate.Execute(buf,
-		Fields{Name: typName, Fields: m.GetField()},
-	); err != nil {
+	fields := Fields{Name: typName, Fields: filterHiddenFields(m.GetField())}
+	if err := elementTypeTemplate.Execute(buf, fields); err != nil {
 		panic(err)
 	}
 	for k, vv := range subTypes {
 		if err := xsdTypeTemplate.Execute(buf,
-			Fields{Name: k, Fields: vv},
+			Fields{Name: k, Fields: filterHiddenFields(vv)},
 		); err != nil {
 			panic(err)
 		}
 	}
 	return buf.String()
+}
+
+func filterHiddenFields(fields []*descriptor.FieldDescriptorProto) []*descriptor.FieldDescriptorProto {
+	if IsHidden == nil {
+		return fields
+	}
+	oLen, deleted := len(fields),0
+	for i := 0; i < len(fields); i++ {
+		if IsHidden(fields[i].GetName()) {
+			fields = append(fields[:i], fields[i+1:]...)
+			i--
+			deleted++
+		}
+	}
+	if oLen-deleted != len(fields) {
+		panic(fmt.Sprintf("Deleted %d fields from %d, got %d!", deleted, oLen, len(fields)))
+	}
+	return fields
 }
 
 func mkXSDElement(f *descriptor.FieldDescriptorProto) string {
