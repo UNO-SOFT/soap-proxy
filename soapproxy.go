@@ -57,7 +57,7 @@ func (h SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, h.WSDL[i:])
 		return
 	}
-	soapAction := r.Header.Get("SOAPAction")
+	soapAction := strings.Trim(r.Header.Get("SOAPAction"), `"`)
 	if i := strings.LastIndex(soapAction, ".proto/"); i >= 0 {
 		soapAction = soapAction[i+7:]
 	}
@@ -72,8 +72,15 @@ func (h SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	inp := h.Input(soapAction)
 	if inp == nil {
-		http.Error(w, fmt.Sprintf("no input for %q", soapAction), http.StatusBadRequest)
-		return
+		if i := strings.LastIndexByte(soapAction, '/'); i >= 0 {
+			if inp = h.Input(soapAction[i+1:]); inp != nil {
+				soapAction = soapAction[i+1:]
+			}
+		}
+		if inp == nil {
+			http.Error(w, fmt.Sprintf("no input for %q", soapAction), http.StatusBadRequest)
+			return
+		}
 	}
 	if err := dec.DecodeElement(inp, &st); err != nil {
 		soapError(w, errors.Wrapf(err, "Decode into %T", inp))
