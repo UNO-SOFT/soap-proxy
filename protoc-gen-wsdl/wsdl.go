@@ -103,7 +103,6 @@ const wsdlTmpl = xml.Header + `<definitions
   </binding>
   <service name="{{.Package}}__service">
     <port binding="tns:{{.Package}}_soap" name="{{.Package}}">
-	  <!--location-->
       {{range .Locations}}
       <soap:address location="{{.}}"/>
       {{end}}

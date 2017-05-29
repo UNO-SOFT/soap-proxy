@@ -16,7 +16,6 @@
 package soapproxy
 
 import (
-	"bytes"
 	"compress/gzip"
 	"context"
 	"encoding/base64"
@@ -24,7 +23,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -38,22 +36,36 @@ import (
 // WSDL is served on GET requests.
 type SOAPHandler struct {
 	grpcer.Client
-	WSDL string
+	WSDL      string
+	Log       func(keyvals ...interface{}) error
+	Locations []string
 }
 
 func (h SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
+	Log := h.Log
+	if logger, ok := r.Context().Value("logger").(interface {
+		Log(...interface{}) error
+	}); ok {
+		Log = logger.Log
+	}
 	if r.Method == "GET" {
 		w.Header().Set("Content-Type", "application/xml")
-		i := strings.LastIndex(h.WSDL, "</port>")
-		if i < 0 || r.URL.Host == "" {
+		if len(h.Locations) == 0 {
 			io.WriteString(w, h.WSDL)
 			return
 		}
-		var buf bytes.Buffer
-		xml.EscapeText(&buf, []byte(r.URL.String()))
+		i := strings.LastIndex(h.WSDL, "</port>")
+		if i < 0 {
+			io.WriteString(w, h.WSDL)
+			return
+		}
 		io.WriteString(w, h.WSDL[:i])
-		io.WriteString(w, "<soap:address location=\""+buf.String()+"\"/>\n")
+		for _, loc := range h.Locations {
+			io.WriteString(w, "<soap:address location=\"")
+			xml.EscapeText(w, []byte(loc))
+			io.WriteString(w, "\"/>\n")
+		}
 		io.WriteString(w, h.WSDL[i:])
 		return
 	}
@@ -86,7 +98,7 @@ func (h SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		soapError(w, errors.Wrapf(err, "Decode into %T", inp))
 		return
 	}
-	log.Printf("Calling %q(%#v)", soapAction, inp)
+	Log("msg", "Calling", "soapAction", soapAction, "inp", inp)
 
 	var opts []grpc.CallOption
 	ctx := context.Background()
@@ -115,13 +127,13 @@ func (h SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	for {
 		if err := xml.NewEncoder(w).Encode(part); err != nil {
-			log.Println(err)
+			Log("msg", "encode", "error", err, "part", part)
 			break
 		}
 		w.Write([]byte{'\n'})
 		if part, err = recv.Recv(); err != nil {
 			if err != io.EOF {
-				log.Println(err)
+				Log("msg", "recv", "error", err)
 			}
 			break
 		}
