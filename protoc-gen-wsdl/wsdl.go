@@ -92,9 +92,10 @@ const wsdlTmpl = xml.Header + `<definitions
   </portType>
   <binding name="{{.Package}}_soap" type="tns:{{.Package}}">
     <soap:binding transport="http://schemas.xmlsoap.org/soap/http"/>
+	{{$docu := .Documentation}}
     {{range .GetMethod}}
     <operation name="{{.Name}}">
-      <wsdl:documentation></wsdl:documentation>
+      <wsdl:documentation><![CDATA[{{index $docu .GetName}}]]></wsdl:documentation>
       <soap:operation soapAction="{{$.TargetNS}}{{.GetName}}" style="document" />
       <input><soap:body use="literal"/></input>
       <output><soap:body use="literal"/></output>
@@ -174,6 +175,7 @@ func Generate(resp *protoc.CodeGeneratorResponse, req protoc.CodeGeneratorReques
 		GeneratedAt       time.Time
 		Version, Owner    string
 		Locations         []string
+		Documentation     map[string]string
 	}
 
 	now := time.Now()
@@ -183,8 +185,9 @@ func Generate(resp *protoc.CodeGeneratorResponse, req protoc.CodeGeneratorReques
 	for _, root := range roots {
 		root := root
 		pkg := root.GetName()
-		for _, svc := range root.GetService() {
+		for svcNo, svc := range root.GetService() {
 			grp.Go(func() error {
+				methods := svc.GetMethod()
 				data := whole{
 					Package:  svc.GetName(),
 					TargetNS: "http://" + pkg + "/" + svc.GetName() + "/",
@@ -193,7 +196,17 @@ func Generate(resp *protoc.CodeGeneratorResponse, req protoc.CodeGeneratorReques
 
 					ServiceDescriptorProto: svc,
 					GeneratedAt:            now,
+					Documentation:          make(map[string]string, len(methods)),
 				}
+				if si := root.GetSourceCodeInfo(); si != nil {
+					for _, loc := range si.GetLocation() {
+						if path := loc.GetPath(); len(path) == 4 && path[0] == 6 && path[1] == int32(svcNo) && path[2] == 2 {
+							s := strings.TrimPrefix(strings.Replace(loc.GetLeadingComments(), "\n/", "\n", -1), "/")
+							data.Documentation[methods[int(path[3])].GetName()] = s
+						}
+					}
+				}
+
 				destFn := strings.TrimSuffix(path.Base(pkg), ".proto") + ".wsdl"
 				buf := bufPool.Get().(*bytes.Buffer)
 				buf.Reset()
@@ -311,7 +324,7 @@ func filterHiddenFields(fields []*descriptor.FieldDescriptorProto) []*descriptor
 	if IsHidden == nil {
 		return fields
 	}
-	oLen, deleted := len(fields),0
+	oLen, deleted := len(fields), 0
 	for i := 0; i < len(fields); i++ {
 		if IsHidden(fields[i].GetName()) {
 			fields = append(fields[:i], fields[i+1:]...)
