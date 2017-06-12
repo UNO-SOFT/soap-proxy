@@ -95,7 +95,7 @@ const wsdlTmpl = xml.Header + `<definitions
 	{{$docu := .Documentation}}
     {{range .GetMethod}}
     <operation name="{{.Name}}">
-      <wsdl:documentation><![CDATA[{{index $docu .GetName}}]]></wsdl:documentation>
+      <wsdl:documentation><![CDATA[{{index $docu .GetName | xmlEscape}}]]></wsdl:documentation>
       <soap:operation soapAction="{{$.TargetNS}}{{.GetName}}" style="document" />
       <input><soap:body use="literal"/></input>
       <output><soap:body use="literal"/></output>
@@ -162,6 +162,13 @@ func Generate(resp *protoc.CodeGeneratorResponse, req protoc.CodeGeneratorReques
 		Funcs(template.FuncMap{
 			"mkTypeName": mkTypeName,
 			"mkType":     typer{Types: allTypes}.mkType,
+			"xmlEscape":  func(s string) string {
+				var buf bytes.Buffer
+				if err := xml.EscapeText(&buf, []byte(s)); err != nil {
+					panic(err)
+				}
+				return buf.String()
+			},
 		}).
 		Parse(wsdlTmpl))
 
