@@ -115,8 +115,8 @@ func (h SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/xml")
 	fmt.Fprintf(w, xml.Header+`<soap:Envelope
-	xmlns:soap="http://www.w3.org/2003/05/soap-envelope/"
-	soap:encodingStyle="http://www.w3.org/2003/05/soap-encoding">
+	xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
+	soap:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
 <soap:Body>
 `)
 	defer func() { io.WriteString(w, "\n</soap:Body></soap:Envelope>") }()
@@ -143,8 +143,8 @@ func (h SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func soapError(w http.ResponseWriter, err error) {
 	w.Header().Set("Content-Type", "text/xml")
 	io.WriteString(w, xml.Header+`<soap:Envelope
-	xmlns:soap="http://www.w3.org/2003/05/soap-envelope/"
-	soap:encodingStyle="http://www.w3.org/2003/05/soap-encoding">
+	xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
+	soap:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
 <soap:Body></soap:Body></soap:Envelope>`)
 	encodeSoapFault(w, err)
 }
