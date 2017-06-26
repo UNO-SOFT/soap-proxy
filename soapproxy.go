@@ -50,7 +50,7 @@ func (h SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Log = logger.Log
 	}
 	if r.Method == "GET" {
-		w.Header().Set("Content-Type", "application/xml")
+		w.Header().Set("Content-Type", "text/xml")
 		if len(h.Locations) == 0 {
 			io.WriteString(w, h.WSDL)
 			return
@@ -113,7 +113,7 @@ func (h SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/soap+xml")
+	w.Header().Set("Content-Type", "text/xml")
 	fmt.Fprintf(w, xml.Header+`<soap:Envelope
 	xmlns:soap="http://www.w3.org/2003/05/soap-envelope/"
 	soap:encodingStyle="http://www.w3.org/2003/05/soap-encoding">
@@ -141,7 +141,7 @@ func (h SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func soapError(w http.ResponseWriter, err error) {
-	w.Header().Set("Content-Type", "application/soap+xml")
+	w.Header().Set("Content-Type", "text/xml")
 	io.WriteString(w, xml.Header+`<soap:Envelope
 	xmlns:soap="http://www.w3.org/2003/05/soap-envelope/"
 	soap:encodingStyle="http://www.w3.org/2003/05/soap-encoding">
