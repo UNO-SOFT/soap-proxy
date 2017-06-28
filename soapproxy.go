@@ -90,7 +90,7 @@ func (h SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data := buf.Bytes()
-	if r.Header.Get("Allow-Empty-Tags") == "1" || r.URL.Query().Get("allowEmptyTags") == "1" {
+	if !(r.Header.Get("Keep-Empty-Tags") == "1" || r.URL.Query().Get("keepEmptyTags") == "1") {
 		data = rEmptyTag.ReplaceAll(data, nil)
 	}
 	dec := xml.NewDecoder(bytes.NewReader(data))
