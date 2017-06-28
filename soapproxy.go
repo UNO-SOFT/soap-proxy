@@ -16,6 +16,7 @@
 package soapproxy
 
 import (
+	"bytes"
 	"compress/gzip"
 	"context"
 	"encoding/base64"
@@ -24,7 +25,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"bytes"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -43,7 +44,8 @@ type SOAPHandler struct {
 	Locations []string
 }
 
-var bufPool = sync.Pool{New:func() interface{}{return bytes.NewBuffer(make([]byte, 0, 1024))}}
+var rEmptyTag = regexp.MustCompile(`<[^>]+/>|<([^ >]+)[^>]*></[^>]+>`)
+var bufPool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]byte, 0, 1024)) }}
 
 func (h SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
@@ -82,8 +84,17 @@ func (h SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer bufPool.Put(buf)
 	buf.Reset()
 
-	dec := xml.NewDecoder(io.TeeReader(r.Body, buf))
-	st, err := findBody(dec)
+	if _, err := io.Copy(buf, r.Body); err != nil {
+		Log("error", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	data := buf.Bytes()
+	if r.Header.Get("Allow-Empty-Tags") == "1" || r.URL.Query().Get("allowEmptyTags") == "1" {
+		data = rEmptyTag.ReplaceAll(data, nil)
+	}
+	dec := xml.NewDecoder(bytes.NewReader(data))
+	st, err := FindBody(dec)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -104,6 +115,7 @@ func (h SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err := dec.DecodeElement(inp, &st); err != nil {
+		Log("decode", buf.String(), "into", fmt.Sprintf("%T", inp), "error", err)
 		soapError(w, errors.Wrapf(err, "Decode into %T\n%s", inp, buf.String()))
 		return
 	}
@@ -118,6 +130,7 @@ func (h SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	recv, err := h.Call(soapAction, ctx, inp, opts...)
 	if err != nil {
+		Log("call", soapAction, "inp", inp, "error", err)
 		soapError(w, err)
 		return
 	}
@@ -131,6 +144,7 @@ func (h SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer func() { io.WriteString(w, "\n</soap:Body></soap:Envelope>") }()
 	part, err := recv.Recv()
 	if err != nil {
+		Log("recv-error", err)
 		encodeSoapFault(w, err)
 		return
 	}
@@ -176,8 +190,8 @@ func encodeSoapFault(w io.Writer, err error) error {
 	return err
 }
 
-// findBody will find the first StartElement in soap:Body
-func findBody(dec *xml.Decoder) (xml.StartElement, error) {
+// FindBody will find the first StartElement in soap:Body
+func FindBody(dec *xml.Decoder) (xml.StartElement, error) {
 	var st xml.StartElement
 	var state uint8
 	for {
