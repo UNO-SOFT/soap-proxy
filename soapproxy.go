@@ -24,7 +24,9 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"bytes"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/UNO-SOFT/grpcer"
@@ -40,6 +42,8 @@ type SOAPHandler struct {
 	Log       func(keyvals ...interface{}) error
 	Locations []string
 }
+
+var bufPool = sync.Pool{New:func() interface{}{return bytes.NewBuffer(make([]byte, 0, 1024))}}
 
 func (h SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
@@ -73,7 +77,12 @@ func (h SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if i := strings.LastIndex(soapAction, ".proto/"); i >= 0 {
 		soapAction = soapAction[i+7:]
 	}
-	dec := xml.NewDecoder(r.Body)
+
+	buf := bufPool.Get().(*bytes.Buffer)
+	defer bufPool.Put(buf)
+	buf.Reset()
+
+	dec := xml.NewDecoder(io.TeeReader(r.Body, buf))
 	st, err := findBody(dec)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -95,7 +104,7 @@ func (h SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err := dec.DecodeElement(inp, &st); err != nil {
-		soapError(w, errors.Wrapf(err, "Decode into %T", inp))
+		soapError(w, errors.Wrapf(err, "Decode into %T\n%s", inp, buf.String()))
 		return
 	}
 	Log("msg", "Calling", "soapAction", soapAction, "inp", inp)
