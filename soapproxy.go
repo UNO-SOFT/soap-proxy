@@ -25,7 +25,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"regexp"
+	//"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -44,7 +44,7 @@ type SOAPHandler struct {
 	Locations []string
 }
 
-var rEmptyTag = regexp.MustCompile(`<[^>]+/>|<([^ >]+)[^>]*></[^>]+>`)
+//var rEmptyTag = regexp.MustCompile(`<[^>]+/>|<([^ >]+)[^>]*></[^>]+>`)
 var bufPool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]byte, 0, 1024)) }}
 
 func (h SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -80,20 +80,33 @@ func (h SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		soapAction = soapAction[i+7:]
 	}
 
+	if !(r.Header.Get("Keep-Empty-Tags") == "1" || r.URL.Query().Get("keepEmptyTags") == "1") {
+		//data = rEmptyTag.ReplaceAll(data, nil)
+		save := bufPool.Get().(*bytes.Buffer)
+		defer bufPool.Put(save)
+		save.Reset()
+		buf := bufPool.Get().(*bytes.Buffer)
+		defer bufPool.Put(buf)
+		buf.Reset()
+		if err := FilterEmptyTags(buf, io.TeeReader(r.Body, save)); err != nil {
+			Log("FilterEmptyTags", save.String(), "error", err)
+			r.Body = struct {
+				io.Reader
+				io.Closer
+			}{io.MultiReader(bytes.NewReader(save.Bytes()), r.Body), r.Body}
+		} else {
+			r.Body = struct{
+				io.Reader
+				io.Closer
+			}{bytes.NewReader(buf.Bytes()), r.Body}
+		}
+	}
+
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
 	buf.Reset()
 
-	if _, err := io.Copy(buf, r.Body); err != nil {
-		Log("error", err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	data := buf.Bytes()
-	if !(r.Header.Get("Keep-Empty-Tags") == "1" || r.URL.Query().Get("keepEmptyTags") == "1") {
-		data = rEmptyTag.ReplaceAll(data, nil)
-	}
-	dec := xml.NewDecoder(bytes.NewReader(data))
+	dec := xml.NewDecoder(io.TeeReader(r.Body, buf))
 	st, err := FindBody(dec)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -168,8 +181,9 @@ func soapError(w http.ResponseWriter, err error) {
 	io.WriteString(w, xml.Header+`<soap:Envelope
 	xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
 	soap:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
-<soap:Body></soap:Body></soap:Envelope>`)
+<soap:Body>`)
 	encodeSoapFault(w, err)
+	io.WriteString(w, `</soap:Body></soap:Envelope>`)
 }
 func encodeSoapFault(w io.Writer, err error) error {
 	var code string
@@ -181,7 +195,11 @@ func encodeSoapFault(w io.Writer, err error) error {
 	io.WriteString(w, `
 <soap:Fault>
 <Code>`+code+`</Code><Reason>`)
-	xml.EscapeText(w, []byte(err.Error()))
+	buf := bufPool.Get().(*bytes.Buffer)
+	defer bufPool.Put(buf)
+	buf.Reset()
+	xml.EscapeText(buf, []byte(err.Error()))
+	w.Write(bytes.Replace(buf.Bytes(), []byte("&#xA;"), []byte{'\n'}, -1))
 	io.WriteString(w, `</Reason><Detail>`)
 	xml.EscapeText(w, []byte(fmt.Sprintf("%+v", err)))
 	_, err = io.WriteString(w, `</Detail>
@@ -228,6 +246,68 @@ func Ungzb64(s string) string {
 		panic(err)
 	}
 	return string(b)
+}
+
+func FilterEmptyTags(w io.Writer, r io.Reader) error {
+	dec := xml.NewDecoder(r)
+	enc := xml.NewEncoder(w)
+	var unwritten []xml.Token
+	Unwrite := func() error {
+		var err error
+		for _, t := range unwritten {
+			if err = enc.EncodeToken(t); err != nil {
+				break
+			}
+		}
+		unwritten = unwritten[:0]
+		return err
+	}
+	for {
+		tok, err := dec.Token()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return err
+		}
+		switch tok.(type) {
+		case xml.Comment, xml.Directive, xml.ProcInst:
+			if err := enc.EncodeToken(tok); err != nil {
+				return err
+			}
+			continue
+
+		case xml.StartElement:
+			if len(unwritten) != 0 {
+				Unwrite()
+			}
+			unwritten = append(unwritten, tok)
+
+		case xml.EndElement:
+			if len(unwritten) != 0 {
+				if _, ok := unwritten[len(unwritten)-1].(xml.StartElement); ok {
+					unwritten = unwritten[:len(unwritten)-1]
+					continue
+				}
+				Unwrite()
+			}
+			enc.EncodeToken(tok)
+
+		case xml.CharData:
+			if len(unwritten) == 0 {
+				enc.EncodeToken(tok)
+				continue
+			}
+			if _, ok := unwritten[len(unwritten)-1].(xml.StartElement); ok {
+				Unwrite()
+				enc.EncodeToken(tok)
+			} else {
+				unwritten = append(unwritten, tok)
+			}
+		}
+	}
+	Unwrite()
+	return enc.Flush()
 }
 
 // vim: set fileencoding=utf-8 noet:
