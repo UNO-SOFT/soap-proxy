@@ -19,6 +19,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"encoding/base64"
 	"encoding/xml"
 	"fmt"
@@ -132,7 +133,10 @@ func (h SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		soapError(w, errors.Wrapf(err, "Decode into %T\n%s", inp, buf.String()))
 		return
 	}
-	Log("msg", "Calling", "soapAction", soapAction, "inp", inp)
+	buf.Reset()
+	jenc := json.NewEncoder(buf)
+	_ = jenc.Encode(inp)
+	Log("msg", "Calling", "soapAction", soapAction, "inp", buf.String())
 
 	var opts []grpc.CallOption
 	ctx := context.Background()
@@ -162,6 +166,9 @@ func (h SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for {
+		buf.Reset()
+		_ = jenc.Encode(part)
+		Log("recv", buf.String())
 		if err := xml.NewEncoder(w).Encode(part); err != nil {
 			Log("msg", "encode", "error", err, "part", part)
 			break
