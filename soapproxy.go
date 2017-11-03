@@ -19,8 +19,8 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"encoding/json"
 	"encoding/base64"
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -34,6 +34,7 @@ import (
 	"github.com/UNO-SOFT/grpcer"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 )
 
 // SOAPHandler is a http.Handler which proxies SOAP requests to the Client.
@@ -96,7 +97,7 @@ func (h SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				io.Closer
 			}{io.MultiReader(bytes.NewReader(save.Bytes()), r.Body), r.Body}
 		} else {
-			r.Body = struct{
+			r.Body = struct {
 				io.Reader
 				io.Closer
 			}{bytes.NewReader(buf.Bytes()), r.Body}
@@ -185,6 +186,15 @@ func (h SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func soapError(w http.ResponseWriter, err error) {
 	w.Header().Set("Content-Type", "text/xml")
+	switch grpc.Code(errors.Cause(err)) {
+	case codes.PermissionDenied, codes.Unauthenticated:
+		w.WriteHeader(http.StatusUnauthorized)
+	case codes.Unknown:
+		if desc := grpc.ErrorDesc(err); desc == "bad username or password" {
+			w.WriteHeader(http.StatusUnauthorized)
+		}
+	}
+
 	io.WriteString(w, xml.Header+`<soap:Envelope
 	xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
 	soap:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
