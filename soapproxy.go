@@ -247,7 +247,6 @@ func FindBody(dec *xml.Decoder) (xml.StartElement, error) {
 			return st, io.EOF
 		}
 	}
-	return st, io.EOF
 }
 
 // Ungzb64 decodes-decompresses the given gzipped-base64-encoded string.

@@ -162,7 +162,7 @@ func Generate(resp *protoc.CodeGeneratorResponse, req protoc.CodeGeneratorReques
 		Funcs(template.FuncMap{
 			"mkTypeName": mkTypeName,
 			"mkType":     typer{Types: allTypes}.mkType,
-			"xmlEscape":  func(s string) string {
+			"xmlEscape": func(s string) string {
 				var buf bytes.Buffer
 				if err := xml.EscapeText(&buf, []byte(s)); err != nil {
 					panic(err)
@@ -458,23 +458,6 @@ func CamelCase(text string) string {
 	},
 		text,
 	)
-}
-
-// UnCamelCase reverses CamelCase
-func UnCamelCase(s string) string {
-	v := make([]rune, 0, len(s))
-	for i, r := range s {
-		if i == 0 {
-			v = append(v, unicode.ToLower(r))
-			continue
-		}
-		if unicode.IsUpper(r) {
-			v = append(v, '_', unicode.ToLower(r))
-			continue
-		}
-		v = append(v, r)
-	}
-	return string(v)
 }
 
 func gzb64(s string) string {

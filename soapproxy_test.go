@@ -23,7 +23,7 @@ import (
 )
 
 func TestSOAPParse(t *testing.T) {
-	st, err := findBody(xml.NewDecoder(strings.NewReader(xml.Header + `<soap:Envelope
+	st, err := FindBody(xml.NewDecoder(strings.NewReader(xml.Header + `<soap:Envelope
 xmlns:soap="http://www.w3.org/2003/05/soap-envelope/"
 soap:encodingStyle="http://www.w3.org/2003/05/soap-encoding">
 
@@ -51,7 +51,7 @@ func TestXMLDecode(t *testing.T) {
 		PAddr     string `protobuf:"bytes,3,opt,name=p_addr,json=pAddr,proto3" json:"p_addr,omitempty"`
 	}
 	dec := xml.NewDecoder(strings.NewReader(`<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><DbDealer_Login><PLoginNev>b0917174</PLoginNev><PJelszo>b0917174</PJelszo></DbDealer_Login></soap:Body></soap:Envelope>`))
-	st, err := findBody(dec)
+	st, err := FindBody(dec)
 	if err != nil {
 		t.Fatal(err)
 	}
