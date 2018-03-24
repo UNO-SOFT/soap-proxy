@@ -161,7 +161,7 @@ func Generate(resp *protoc.CodeGeneratorResponse, req protoc.CodeGeneratorReques
 		New("wsdl").
 		Funcs(template.FuncMap{
 			"mkTypeName": mkTypeName,
-			"mkType":     typer{Types: allTypes}.mkType,
+			"mkType":     (&typer{Types: allTypes}).mkType,
 			"xmlEscape": func(s string) string {
 				var buf bytes.Buffer
 				if err := xml.EscapeText(&buf, []byte(s)); err != nil {
@@ -284,10 +284,11 @@ var xsdTypeTemplate = template.Must(
 `))
 
 type typer struct {
-	Types map[string]*descriptor.DescriptorProto
+	Types       map[string]*descriptor.DescriptorProto
+	inputRawXml map[string]struct{}
 }
 
-func (t typer) mkType(fullName string, m *descriptor.DescriptorProto) string {
+func (t *typer) mkType(fullName string, m *descriptor.DescriptorProto) string {
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	defer func() {
@@ -297,7 +298,25 @@ func (t typer) mkType(fullName string, m *descriptor.DescriptorProto) string {
 
 	// <BrunoLevelek_Output><PLevelek><SzerzAzon>1</SzerzAzon><Tipus></Tipus><Url></Url><Datum></Datum></PLevelek><PLevelek><SzerzAzon>2</SzerzAzon><Tipus>f</Tipus><Url></Url><Datum></Datum></PLevelek><PHibaKod>0</PHibaKod><PHibaSzov></PHibaSzov></BrunoLevelek_Output>Hello, playground
 	subTypes := make(map[string][]*descriptor.FieldDescriptorProto)
-	for _, f := range m.GetField() {
+	mFields := m.GetField()
+	if len(mFields) == 1 && mFields[0].GetType().String() == "TYPE_STRING" {
+		var any bool
+		if any = strings.HasSuffix(fullName, "_Input") && mFields[0].GetName() == "p_raw_xml"; any {
+			if t.inputRawXml == nil {
+				t.inputRawXml = make(map[string]struct{})
+			}
+			t.inputRawXml[strings.TrimSuffix(fullName, "_Input")] = struct{}{}
+		} else if mFields[0].GetName() == "ret" {
+			_, any = t.inputRawXml[strings.TrimSuffix(fullName, "_Output")]
+		}
+		if any {
+			fmt.Fprintf(buf, `<xsd:element name="%s">
+	<xsd:complexType><xsd:sequence><xsd:any /></xsd:sequence></xsd:complexType>
+	</xsd:element>`, fullName)
+			return buf.String()
+		}
+	}
+	for _, f := range mFields {
 		tn := mkTypeName(f.GetTypeName())
 		if tn == "" {
 			continue
