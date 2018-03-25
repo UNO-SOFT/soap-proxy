@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions
+    name="Gdpr"
+    targetNamespace="http://unosoft.hu/ws/bruno/pb/gdpr/gdpr.proto/Gdpr/"
+    xmlns="http://schemas.xmlsoap.org/wsdl/"
+    xmlns:tns="http://unosoft.hu/ws/bruno/pb/gdpr/gdpr.proto/Gdpr/"
+    xmlns:types="http://unosoft.hu/ws/bruno/pb/gdpr/gdpr.proto/Gdpr_types/"
+    xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
+    xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/"
+    xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <documentation>
+    Service: Gdpr
+    Version:
+    Generated: 2018-03-24 21:49:23.634694615 +0100 CET m=+0.009068949
+    Owner:
+  </documentation>
+  <types>
+    <xsd:schema elementFormDefault="qualified" targetNamespace="http://unosoft.hu/ws/bruno/pb/gdpr/gdpr.proto/Gdpr_types/">
+      <xsd:element name="exception">
+        <xsd:complexType>
+          <xsd:sequence>
+            <xsd:element name="type" nillable="true" type="xsd:string"/>
+            <xsd:element name="message" nillable="true" type="xsd:string"/>
+            <xsd:element name="traceback" nillable="true" type="xsd:string"/>
+          </xsd:sequence>
+        </xsd:complexType>
+      </xsd:element>
+
+        <xsd:element name="DbWebGdpr_Keres_Input">
+	<xsd:complexType><xsd:sequence><xsd:any /></xsd:sequence></xsd:complexType>
+	</xsd:element>
+
+        <xsd:element name="DbWebGdpr_Keres_Output">
+	<xsd:complexType><xsd:sequence><xsd:any /></xsd:sequence></xsd:complexType>
+	</xsd:element>
+
+        <xsd:element name="DbWebGdpr_Kereses_Input">
+  <xsd:complexType>
+    <xsd:sequence>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="PSzerzAzon" type="xsd:int"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="PKarszam" type="xsd:int"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="PRendszam" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="PKutId" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="PAdoazonosito" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="PBankszamlaSzam" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="PEmail" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="POkmanyTip" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="POkmanySzam" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="PContactAzon" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="PPartnerkod" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="PKeresztnev" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="PVezeteknev" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="PSzulnev" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="PSzuldat" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="PSzulhely" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="PAnyanev" type="xsd:string"/>
+
+    </xsd:sequence>
+  </xsd:complexType>
+</xsd:element>
+
+
+        <xsd:element name="DbWebGdpr_Kereses_Output">
+  <xsd:complexType>
+    <xsd:sequence>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="PHibaKod" type="xsd:int"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="PHibaSzov" type="xsd:string"/>
+	<xsd:element minOccurs="0" nillable="true" maxOccurs="999" name="Ret" type="types:DbWebGdpr_PersonRecTyp_Bruno"/>
+
+    </xsd:sequence>
+  </xsd:complexType>
+</xsd:element>
+<xsd:complexType name="DbWebGdpr_PersonRecTyp_Bruno">
+  <xsd:sequence>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="KutId" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Partnerid" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Lastmodifieddate" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Actualversion" type="xsd:int"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Currentversion" type="xsd:int"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Validfrom" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Validto" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Startdate" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Deathdate" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Lastname" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Firstname" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Fullname" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Socialsecuritynumber" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Gender" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Referencecountrycode" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Status" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Statusreason" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Vip" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Persontitle" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Professiontype" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Viphu" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Pltclexpsd" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Publicflag" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Professioncode" type="xsd:int"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Maritalstatus" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Isalive" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Birthcountry" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Professione" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Qualification" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Taxid" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Birthcity" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Birthhospital" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Sprtmdcllicence" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Lefthanded" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Associatedpeople" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Prsnlid" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Kknyr" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Previoussurname" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Motherlastname" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Countrycode" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Sprtmdcllicencevalidity" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Sprtmdcllicenceother" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Taxresidence" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Ssn" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Childrennumber" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Criminalrecord" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Workplace" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Tradeunionmembership" type="xsd:string"/>
+  <xsd:element minOccurs="0" nillable="true" maxOccurs="1" name="Objectid" type="xsd:string"/>
+
+  </xsd:sequence>
+</xsd:complexType>
+
+
+    </xsd:schema>
+  </types>
+  <message name="error">
+    <part element="types:exception" name="error"/>
+  </message>
+
+
+
+  <message name="DbWebGdpr_Keres_Input">
+    <part element="types:DbWebGdpr_Keres_Input" name="DbWebGdpr_Keres_Input" />
+  </message>
+  <message name="DbWebGdpr_Keres_Output">
+    <part element="types:DbWebGdpr_Keres_Output" name="DbWebGdpr_Keres_Output" />
+  </message>
+
+
+
+  <message name="DbWebGdpr_Kereses_Input">
+    <part element="types:DbWebGdpr_Kereses_Input" name="DbWebGdpr_Kereses_Input" />
+  </message>
+  <message name="DbWebGdpr_Kereses_Output">
+    <part element="types:DbWebGdpr_Kereses_Output" name="DbWebGdpr_Kereses_Output" />
+  </message>
+
+  <portType name="Gdpr">
+
+    <operation name="DbWebGdpr_Keres">
+      <input message="tns:DbWebGdpr_Keres_Input"/>
+      <output message="tns:DbWebGdpr_Keres_Output"/>
+      <fault message="tns:error" name="error"/>
+    </operation>
+    <operation name="DbWebGdpr_Kereses">
+      <input message="tns:DbWebGdpr_Kereses_Input"/>
+      <output message="tns:DbWebGdpr_Kereses_Output"/>
+      <fault message="tns:error" name="error"/>
+    </operation>
+  </portType>
+  <binding name="Gdpr_soap" type="tns:Gdpr">
+    <soap:binding transport="http://schemas.xmlsoap.org/soap/http"/>
+
+
+    <operation name="DbWebGdpr_Keres">
+      <wsdl:documentation><![CDATA[]]></wsdl:documentation>
+      <soap:operation soapAction="http://unosoft.hu/ws/bruno/pb/gdpr/gdpr.proto/Gdpr/DbWebGdpr_Keres" style="document" />
+      <input><soap:body use="literal"/></input>
+      <output><soap:body use="literal"/></output>
+      <fault name="error"><soap:fault name="error" use="literal"/></fault>
+    </operation>
+    <operation name="DbWebGdpr_Kereses">
+      <wsdl:documentation><![CDATA[ &#xA;     ,BankAccountList BankAccountList_tab_typ,&#xA;     EMailAddressList EMailAddressList_tab_typ,&#xA;     GDPRIdentityDocument GDPRIdentityDocument_tab_typ,&#xA;     GDPRPhoneAddress GDPRPhoneAddressList_tab_typ,&#xA;     GDPRPostalAddress GDPRPostalAddressList_tab_typ,&#xA;     GDPRSimplifiedContract GDPRSimplifiedContract_tab_typ&#xA;     &#xA;]]></wsdl:documentation>
+      <soap:operation soapAction="http://unosoft.hu/ws/bruno/pb/gdpr/gdpr.proto/Gdpr/DbWebGdpr_Kereses" style="document" />
+      <input><soap:body use="literal"/></input>
+      <output><soap:body use="literal"/></output>
+      <fault name="error"><soap:fault name="error" use="literal"/></fault>
+    </operation>
+  </binding>
+  <service name="Gdpr__service">
+    <port binding="tns:Gdpr_soap" name="Gdpr">
+
+    <soap:address location="&#39;https://www.unosoft.hu:13463/gdpr&#39;"/>
+</port>
+  </service>
+</definitions>

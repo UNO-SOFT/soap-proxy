@@ -17,10 +17,26 @@ package soapproxy
 
 import (
 	"encoding/xml"
+	"io/ioutil"
 	"log"
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestRawXML(t *testing.T) {
+	b, err := ioutil.ReadFile(filepath.Join("testdata", "withAny.wsdl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := &SOAPHandler{WSDL: string(b)}
+	if !h.justRawXML("DbWebGdpr_Keres") {
+		t.Error("DbWebGdpdr_Keres: wanted true, got false")
+	}
+	if h.justRawXML("DbWebGdpr_Kereses") {
+		t.Error("DbWebGdpdr_Kereses: wanted false, got true")
+	}
+}
 
 func TestSOAPParse(t *testing.T) {
 	st, err := FindBody(xml.NewDecoder(strings.NewReader(xml.Header + `<soap:Envelope

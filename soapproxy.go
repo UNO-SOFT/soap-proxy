@@ -44,12 +44,15 @@ type SOAPHandler struct {
 	WSDL      string
 	Log       func(keyvals ...interface{}) error
 	Locations []string
+
+	wsdlWithLocations string
+	rawXML            map[string]struct{}
 }
 
 //var rEmptyTag = regexp.MustCompile(`<[^>]+/>|<([^ >]+)[^>]*></[^>]+>`)
 var bufPool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]byte, 0, 1024)) }}
 
-func (h SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h *SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	Log := h.Log
 	if logger, ok := r.Context().Value("logger").(interface {
@@ -59,81 +62,25 @@ func (h SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.Method == "GET" {
 		w.Header().Set("Content-Type", "text/xml")
-		if len(h.Locations) == 0 {
-			io.WriteString(w, h.WSDL)
-			return
-		}
-		i := strings.LastIndex(h.WSDL, "</port>")
-		if i < 0 {
-			io.WriteString(w, h.WSDL)
-			return
-		}
-		io.WriteString(w, h.WSDL[:i])
-		for _, loc := range h.Locations {
-			io.WriteString(w, "<soap:address location=\"")
-			xml.EscapeText(w, []byte(loc))
-			io.WriteString(w, "\"/>\n")
-		}
-		io.WriteString(w, h.WSDL[i:])
+		io.WriteString(w, h.getWSDL())
 		return
 	}
-	soapAction := strings.Trim(r.Header.Get("SOAPAction"), `"`)
-	if i := strings.LastIndex(soapAction, ".proto/"); i >= 0 {
-		soapAction = soapAction[i+7:]
-	}
+	mayFilterEmptyTags(r, Log)
 
-	if !(r.Header.Get("Keep-Empty-Tags") == "1" || r.URL.Query().Get("keepEmptyTags") == "1") {
-		//data = rEmptyTag.ReplaceAll(data, nil)
-		save := bufPool.Get().(*bytes.Buffer)
-		defer bufPool.Put(save)
-		save.Reset()
-		buf := bufPool.Get().(*bytes.Buffer)
-		defer bufPool.Put(buf)
-		buf.Reset()
-		if err := FilterEmptyTags(buf, io.TeeReader(r.Body, save)); err != nil {
-			Log("FilterEmptyTags", save.String(), "error", err)
-			r.Body = struct {
-				io.Reader
-				io.Closer
-			}{io.MultiReader(bytes.NewReader(save.Bytes()), r.Body), r.Body}
-		} else {
-			r.Body = struct {
-				io.Reader
-				io.Closer
-			}{bytes.NewReader(buf.Bytes()), r.Body}
+	soapAction, inp, err := h.decodeRequest(r)
+	if err != nil {
+		Log("msg", "decode", "into", fmt.Sprintf("%T", inp), "error", err)
+		switch errors.Cause(err) {
+		case errDecode:
+			soapError(w, err)
+		default:
+			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
+		return
 	}
 
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
-	buf.Reset()
-
-	dec := xml.NewDecoder(io.TeeReader(r.Body, buf))
-	st, err := FindBody(dec)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if soapAction == "" {
-		soapAction = st.Name.Local
-	}
-	inp := h.Input(soapAction)
-	if inp == nil {
-		if i := strings.LastIndexByte(soapAction, '/'); i >= 0 {
-			if inp = h.Input(soapAction[i+1:]); inp != nil {
-				soapAction = soapAction[i+1:]
-			}
-		}
-		if inp == nil {
-			http.Error(w, fmt.Sprintf("no input for %q", soapAction), http.StatusBadRequest)
-			return
-		}
-	}
-	if err := dec.DecodeElement(inp, &st); err != nil {
-		Log("decode", buf.String(), "into", fmt.Sprintf("%T", inp), "error", err)
-		soapError(w, errors.Wrapf(err, "Decode into %T\n%s", inp, buf.String()))
-		return
-	}
 	buf.Reset()
 	jenc := json.NewEncoder(buf)
 	_ = jenc.Encode(inp)
@@ -153,6 +100,10 @@ func (h SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.encodeResponse(w, recv, Log)
+}
+
+func (h *SOAPHandler) encodeResponse(w http.ResponseWriter, recv grpcer.Receiver, Log func(...interface{}) error) {
 	w.Header().Set("Content-Type", "text/xml")
 	fmt.Fprintf(w, xml.Header+`<soap:Envelope
 	xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
@@ -166,6 +117,10 @@ func (h SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		encodeSoapFault(w, err)
 		return
 	}
+	buf := bufPool.Get().(*bytes.Buffer)
+	defer bufPool.Put(buf)
+	buf.Reset()
+	jenc := json.NewEncoder(buf)
 	for {
 		buf.Reset()
 		_ = jenc.Encode(part)
@@ -180,6 +135,136 @@ func (h SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				Log("msg", "recv", "error", err)
 			}
 			break
+		}
+	}
+}
+
+var (
+	errDecode   = errors.New("decode XML")
+	errNotFound = errors.New("not found")
+)
+
+func (h *SOAPHandler) decodeRequest(r *http.Request) (string, interface{}, error) {
+	buf := bufPool.Get().(*bytes.Buffer)
+	defer bufPool.Put(buf)
+	buf.Reset()
+
+	dec := xml.NewDecoder(io.TeeReader(r.Body, buf))
+	st, err := FindBody(dec)
+	if err != nil {
+		return "", nil, err
+	}
+	soapAction := strings.Trim(r.Header.Get("SOAPAction"), `"`)
+	if i := strings.LastIndex(soapAction, ".proto/"); i >= 0 {
+		soapAction = soapAction[i+7:]
+	}
+	if soapAction == "" {
+		soapAction = st.Name.Local
+	}
+	inp := h.Input(soapAction)
+	if inp == nil {
+		if i := strings.LastIndexByte(soapAction, '/'); i >= 0 {
+			if inp = h.Input(soapAction[i+1:]); inp != nil {
+				soapAction = soapAction[i+1:]
+			}
+		}
+		if inp == nil {
+			return soapAction, nil, errors.Wrapf(errNotFound, "no input for %q", soapAction)
+		}
+	}
+
+	if h.justRawXML(soapAction) {
+		// TODO(tgulacsi): just read the inner XML, and provide it as the string into inp.PRawXml
+		h.Log("msg", "justRawXML")
+	}
+
+	if err = dec.DecodeElement(inp, &st); err != nil {
+		err = errors.Wrapf(errDecode, "into %T: %v\n%s", inp, err, buf.String())
+	}
+	return soapAction, inp, err
+}
+
+func (h *SOAPHandler) getWSDL() string {
+	if h.wsdlWithLocations == "" {
+		h.wsdlWithLocations = h.WSDL
+		if len(h.Locations) != 0 {
+			i := strings.LastIndex(h.WSDL, "</port>")
+			if i >= 0 {
+				h.wsdlWithLocations = h.WSDL[:i]
+				for _, loc := range h.Locations {
+					h.wsdlWithLocations += fmt.Sprintf("<soap:address location=%q />\n", loc)
+				}
+				h.wsdlWithLocations += h.WSDL[i:]
+			}
+		}
+	}
+	return h.wsdlWithLocations
+}
+
+func (h *SOAPHandler) justRawXML(soapAction string) bool {
+	if h.rawXML != nil {
+		_, ok := h.rawXML[soapAction]
+		return ok
+	}
+	h.rawXML = make(map[string]struct{})
+	dec := xml.NewDecoder(strings.NewReader(h.WSDL))
+	stack := make([]xml.StartElement, 0, 8)
+	names := make(map[string]struct{})
+	for {
+		tok, err := dec.Token()
+		if err != nil {
+			break
+		}
+		switch x := tok.(type) {
+		case xml.StartElement:
+			if x.Name.Local == "any" && (x.Name.Space == "" || x.Name.Space == "http://www.w3.org/2001/XMLSchema") {
+				if len(stack) >= 3 && stack[len(stack)-1].Name.Local == "sequence" && stack[len(stack)-2].Name.Local == "complexType" && stack[len(stack)-3].Name.Local == "element" {
+					for _, attr := range stack[len(stack)-3].Attr {
+						if attr.Name.Local == "name" {
+							names[attr.Value] = struct{}{}
+						}
+					}
+				}
+			}
+			stack = append(stack, x)
+		case xml.EndElement:
+			stack = stack[:len(stack)-1]
+		}
+	}
+	for nm := range names {
+		k := strings.TrimSuffix(nm, "_Input")
+		if k != nm {
+			if _, ok := names[k+"_Output"]; ok {
+				h.rawXML[k] = struct{}{}
+			}
+		}
+	}
+	_, ok := h.rawXML[soapAction]
+	return ok
+}
+
+func mayFilterEmptyTags(r *http.Request, Log func(...interface{}) error) {
+	if !(r.Header.Get("Keep-Empty-Tags") == "1" || r.URL.Query().Get("keepEmptyTags") == "1") {
+		//data = rEmptyTag.ReplaceAll(data, nil)
+		save := bufPool.Get().(*bytes.Buffer)
+		defer bufPool.Put(save)
+		save.Reset()
+		buf := bufPool.Get().(*bytes.Buffer)
+		defer bufPool.Put(buf)
+		buf.Reset()
+		if err := FilterEmptyTags(buf, io.TeeReader(r.Body, save)); err != nil {
+			if Log != nil {
+				Log("FilterEmptyTags", save.String(), "error", err)
+			}
+			r.Body = struct {
+				io.Reader
+				io.Closer
+			}{io.MultiReader(bytes.NewReader(save.Bytes()), r.Body), r.Body}
+		} else {
+			r.Body = struct {
+				io.Reader
+				io.Closer
+			}{bytes.NewReader(buf.Bytes()), r.Body}
 		}
 	}
 }
