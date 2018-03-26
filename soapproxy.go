@@ -150,7 +150,7 @@ func (h *SOAPHandler) decodeRequest(r *http.Request) (string, interface{}, error
 	buf.Reset()
 
 	dec := xml.NewDecoder(io.TeeReader(r.Body, buf))
-	st, err := FindBody(dec)
+	st, err := findSoapBody(dec)
 	if err != nil {
 		return "", nil, err
 	}
@@ -158,6 +158,21 @@ func (h *SOAPHandler) decodeRequest(r *http.Request) (string, interface{}, error
 	if i := strings.LastIndex(soapAction, ".proto/"); i >= 0 {
 		soapAction = soapAction[i+7:]
 	}
+	if h.justRawXML(soapAction) {
+		// TODO(tgulacsi): just read the inner XML, and provide it as the string into inp.PRawXml
+		h.Log("msg", "justRawXML")
+		type anyXML struct {
+			RawXML string `xml:",innerxml"`
+		}
+		var any anyXML
+		if err := dec.DecodeElement(&any, &st); err != nil {
+			return soapAction, nil, errors.Wrapf(errDecode, "into %T: %v\n%s", any, err, buf.String())
+		}
+	}
+	if st, err = nextStart(dec); err != nil {
+		return "", nil, err
+	}
+
 	if soapAction == "" {
 		soapAction = st.Name.Local
 	}
@@ -171,11 +186,6 @@ func (h *SOAPHandler) decodeRequest(r *http.Request) (string, interface{}, error
 		if inp == nil {
 			return soapAction, nil, errors.Wrapf(errNotFound, "no input for %q", soapAction)
 		}
-	}
-
-	if h.justRawXML(soapAction) {
-		// TODO(tgulacsi): just read the inner XML, and provide it as the string into inp.PRawXml
-		h.Log("msg", "justRawXML")
 	}
 
 	if err = dec.DecodeElement(inp, &st); err != nil {
@@ -310,25 +320,47 @@ func encodeSoapFault(w io.Writer, err error) error {
 	return err
 }
 
-// FindBody will find the first StartElement in soap:Body
+// FindBody will find the first StartElement after soap:Body.
 func FindBody(dec *xml.Decoder) (xml.StartElement, error) {
+	st, err := findSoapBody(dec)
+	if err != nil {
+		return st, err
+	}
+	return nextStart(dec)
+}
+
+// findSoapBody will find the soap:Body StartElement.
+func findSoapBody(dec *xml.Decoder) (xml.StartElement, error) {
 	var st xml.StartElement
-	var state uint8
 	for {
 		tok, err := dec.Token()
 		if err != nil {
 			return st, err
 		}
 		var ok bool
-		st, ok = tok.(xml.StartElement)
-		if ok {
-			if state == 0 && strings.EqualFold(st.Name.Local, "body") {
-				state++
-				continue
-			} else if state == 1 {
+		if st, ok = tok.(xml.StartElement); ok {
+			if strings.EqualFold(st.Name.Local, "body") &&
+				(st.Name.Space == "" ||
+					st.Name.Space == "http://www.w3.org/2003/05/soap-envelope/" ||
+					st.Name.Space == "http://schemas.xmlsoap.org/soap/envelope/") {
 				return st, nil
 			}
-		} else if _, ok = tok.(xml.EndElement); ok && state == 1 {
+		}
+	}
+}
+
+// nextStart finds the first StartElement
+func nextStart(dec *xml.Decoder) (xml.StartElement, error) {
+	var st xml.StartElement
+	for {
+		tok, err := dec.Token()
+		if err != nil {
+			return st, err
+		}
+		var ok bool
+		if st, ok = tok.(xml.StartElement); ok {
+			return st, nil
+		} else if _, ok = tok.(xml.EndElement); ok {
 			return st, io.EOF
 		}
 	}

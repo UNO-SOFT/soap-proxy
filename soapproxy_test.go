@@ -16,12 +16,16 @@
 package soapproxy
 
 import (
+	"bytes"
 	"encoding/xml"
+	"io"
 	"io/ioutil"
 	"log"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/pkg/errors"
 )
 
 func TestRawXML(t *testing.T) {
@@ -36,6 +40,33 @@ func TestRawXML(t *testing.T) {
 	if h.justRawXML("DbWebGdpr_Kereses") {
 		t.Error("DbWebGdpdr_Kereses: wanted false, got true")
 	}
+}
+
+func TestParseAny(t *testing.T) {
+	var buf bytes.Buffer
+	dec := xml.NewDecoder(io.TeeReader(strings.NewReader(xml.Header+`<soap:Envelope
+xmlns:soap="http://www.w3.org/2003/05/soap-envelope/"
+soap:encodingStyle="http://www.w3.org/2003/05/soap-encoding">
+
+<soap:Body>
+  <m:GetPrice xmlns:m="http://www.w3schools.com/prices">
+    <m:Item>Apples</m:Item>
+  </m:GetPrice>
+</soap:Body>
+
+</soap:Envelope>`), &buf))
+	st, err := findSoapBody(dec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	type anyXML struct {
+		RawXML string `xml:",innerxml"`
+	}
+	var any anyXML
+	if err := dec.DecodeElement(&any, &st); err != nil {
+		t.Error(errors.Wrapf(errDecode, "into %T: %v\n%s", any, err, buf.String()))
+	}
+	t.Logf("any=%#v", any)
 }
 
 func TestSOAPParse(t *testing.T) {
