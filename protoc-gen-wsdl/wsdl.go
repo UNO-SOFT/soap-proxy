@@ -142,16 +142,12 @@ func Generate(resp *protoc.CodeGeneratorResponse, req protoc.CodeGeneratorReques
 
 	msgTypes := make(map[string]*descriptor.DescriptorProto, len(allTypes))
 	for _, root := range roots {
-		//k := "." + root.GetName() + "."
-		var k string
 		for _, svc := range root.GetService() {
 			for _, m := range svc.GetMethod() {
-				if kk := k + m.GetInputType(); len(kk) > len(k) {
-					msgTypes[kk] = allTypes[kk]
-				}
-				if kk := k + m.GetOutputType(); len(kk) > len(k) {
-					msgTypes[kk] = allTypes[kk]
-				}
+				kk := m.GetInputType()
+				msgTypes[kk] = allTypes[kk]
+				kk = m.GetOutputType()
+				msgTypes[kk] = allTypes[kk]
 			}
 		}
 	}
@@ -332,6 +328,7 @@ func (t *typer) mkType(fullName string, m *descriptor.DescriptorProto) string {
 		fullName = m.GetName()
 	}
 	typName := mkTypeName(fullName)
+	//log.Println("full:", fullName, "typ:", typName)
 	fields := Fields{Name: typName, Fields: filterHiddenFields(m.GetField())}
 	if err := elementTypeTemplate.Execute(buf, fields); err != nil {
 		panic(err)

@@ -100,10 +100,10 @@ func (h *SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.encodeResponse(w, recv, Log)
+	h.encodeResponse(w, recv, soapAction, Log)
 }
 
-func (h *SOAPHandler) encodeResponse(w http.ResponseWriter, recv grpcer.Receiver, Log func(...interface{}) error) {
+func (h *SOAPHandler) encodeResponse(w http.ResponseWriter, recv grpcer.Receiver, soapAction string, Log func(...interface{}) error) {
 	w.Header().Set("Content-Type", "text/xml")
 	fmt.Fprintf(w, xml.Header+`<soap:Envelope
 	xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
@@ -117,15 +117,26 @@ func (h *SOAPHandler) encodeResponse(w http.ResponseWriter, recv grpcer.Receiver
 		encodeSoapFault(w, err)
 		return
 	}
+	typName := strings.TrimPrefix(fmt.Sprintf("%T", part), "*")
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
 	buf.Reset()
 	jenc := json.NewEncoder(buf)
+	enc := xml.NewEncoder(io.MultiWriter(w, buf))
 	for {
 		buf.Reset()
 		_ = jenc.Encode(part)
-		Log("recv", buf.String())
-		if err := xml.NewEncoder(w).Encode(part); err != nil {
+		Log("recv", buf.String(), "type", typName, "soapAction", soapAction)
+		buf.Reset()
+		if strings.HasSuffix(typName, "_Output") {
+			err = enc.EncodeElement(part,
+				xml.StartElement{Name: xml.Name{Local: soapAction + "_Output"}},
+			)
+		} else {
+			err = enc.Encode(part)
+		}
+		Log("recv-xml", buf.String())
+		if err != nil {
 			Log("msg", "encode", "error", err, "part", part)
 			break
 		}
