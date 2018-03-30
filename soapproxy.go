@@ -26,6 +26,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"reflect"
 	//"regexp"
 	"strings"
 	"sync"
@@ -47,6 +48,16 @@ type SOAPHandler struct {
 
 	wsdlWithLocations string
 	rawXML            map[string]struct{}
+}
+
+func (h *SOAPHandler) Input(name string) interface{} {
+	if inp := h.Client.Input(name); inp != nil {
+		return inp
+	}
+	if i := strings.LastIndexByte(name, '/'); i >= 0 {
+		return h.Client.Input(name[i+1:])
+	}
+	return nil
 }
 
 //var rEmptyTag = regexp.MustCompile(`<[^>]+/>|<([^ >]+)[^>]*></[^>]+>`)
@@ -117,18 +128,24 @@ func (h *SOAPHandler) encodeResponse(w http.ResponseWriter, recv grpcer.Receiver
 		encodeSoapFault(w, err)
 		return
 	}
+	isRaw := h.justRawXML(soapAction)
 	typName := strings.TrimPrefix(fmt.Sprintf("%T", part), "*")
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
 	buf.Reset()
 	jenc := json.NewEncoder(buf)
-	enc := xml.NewEncoder(io.MultiWriter(w, buf))
+	mw := io.MultiWriter(w, buf)
+	enc := xml.NewEncoder(mw)
 	for {
 		buf.Reset()
 		_ = jenc.Encode(part)
 		Log("recv", buf.String(), "type", typName, "soapAction", soapAction)
 		buf.Reset()
-		if strings.HasSuffix(typName, "_Output") {
+		if isRaw {
+			io.WriteString(mw, "<"+soapAction+"_Output>")
+			io.WriteString(mw, reflect.ValueOf(part).Elem().Field(0).String())
+			io.WriteString(mw, "</"+soapAction+"_Output>")
+		} else if strings.HasSuffix(typName, "_Output") {
 			err = enc.EncodeElement(part,
 				xml.StartElement{Name: xml.Name{Local: soapAction + "_Output"}},
 			)
@@ -169,9 +186,11 @@ func (h *SOAPHandler) decodeRequest(r *http.Request) (string, interface{}, error
 	if i := strings.LastIndex(soapAction, ".proto/"); i >= 0 {
 		soapAction = soapAction[i+7:]
 	}
+	if i := strings.IndexByte(soapAction, '/'); i >= 0 {
+		soapAction = soapAction[i+1:]
+	}
 	if h.justRawXML(soapAction) {
-		// TODO(tgulacsi): just read the inner XML, and provide it as the string into inp.PRawXml
-		h.Log("msg", "justRawXML")
+		// Just read the inner XML, and provide it as the string into inp.PRawXml
 		type anyXML struct {
 			RawXML string `xml:",innerxml"`
 		}
@@ -179,6 +198,10 @@ func (h *SOAPHandler) decodeRequest(r *http.Request) (string, interface{}, error
 		if err := dec.DecodeElement(&any, &st); err != nil {
 			return soapAction, nil, errors.Wrapf(errDecode, "into %T: %v\n%s", any, err, buf.String())
 		}
+		inp := h.Input(soapAction)
+		h.Log("any", any, "inp", inp, "T", fmt.Sprintf("%T", inp))
+		reflect.ValueOf(inp).Elem().Field(0).SetString(any.RawXML)
+		return soapAction, inp, nil
 	}
 	if st, err = nextStart(dec); err != nil {
 		return "", nil, err
