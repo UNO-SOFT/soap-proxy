@@ -296,19 +296,20 @@ func (t *typer) mkType(fullName string, m *descriptor.DescriptorProto) string {
 	subTypes := make(map[string][]*descriptor.FieldDescriptorProto)
 	mFields := m.GetField()
 	if len(mFields) == 1 && mFields[0].GetType().String() == "TYPE_STRING" {
+		name := mkTypeName(fullName)
 		var any bool
-		if any = strings.HasSuffix(fullName, "_Input") && mFields[0].GetName() == "p_raw_xml"; any {
+		if any = strings.HasSuffix(name, "_Input") && mFields[0].GetName() == "p_raw_xml"; any {
 			if t.inputRawXml == nil {
 				t.inputRawXml = make(map[string]struct{})
 			}
-			t.inputRawXml[strings.TrimSuffix(fullName, "_Input")] = struct{}{}
+			t.inputRawXml[strings.TrimSuffix(name, "_Input")] = struct{}{}
 		} else if mFields[0].GetName() == "ret" {
-			_, any = t.inputRawXml[strings.TrimSuffix(fullName, "_Output")]
+			_, any = t.inputRawXml[strings.TrimSuffix(name, "_Output")]
 		}
 		if any {
 			fmt.Fprintf(buf, `<xsd:element name="%s">
 	<xsd:complexType><xsd:sequence><xsd:any /></xsd:sequence></xsd:complexType>
-	</xsd:element>`, fullName)
+	</xsd:element>`, name)
 			return buf.String()
 		}
 	}

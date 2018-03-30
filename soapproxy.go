@@ -163,7 +163,7 @@ func (h *SOAPHandler) decodeRequest(r *http.Request) (string, interface{}, error
 	dec := xml.NewDecoder(io.TeeReader(r.Body, buf))
 	st, err := findSoapBody(dec)
 	if err != nil {
-		return "", nil, err
+		return "", nil, errors.WithMessage(err, "findSoapBody in "+buf.String())
 	}
 	soapAction := strings.Trim(r.Header.Get("SOAPAction"), `"`)
 	if i := strings.LastIndex(soapAction, ".proto/"); i >= 0 {
@@ -222,11 +222,25 @@ func (h *SOAPHandler) getWSDL() string {
 	return h.wsdlWithLocations
 }
 
-func (h *SOAPHandler) justRawXML(soapAction string) bool {
-	if h.rawXML != nil {
-		_, ok := h.rawXML[soapAction]
+func (h *SOAPHandler) justRawXML(soapAction string) (isRaw bool) {
+	defer func() {
+		h.Log("msg", "justRawXML", "soapAction", soapAction, "result", isRaw)
+	}()
+	check := func(soapAction string) bool {
+		var ok bool
+		if _, ok = h.rawXML[soapAction]; ok {
+			return true
+		}
+		if i := strings.LastIndexByte(soapAction, '/'); i >= 0 {
+			_, ok = h.rawXML[soapAction[i+1:]]
+		}
 		return ok
 	}
+
+	if h.rawXML != nil {
+		return check(soapAction)
+	}
+
 	h.rawXML = make(map[string]struct{})
 	dec := xml.NewDecoder(strings.NewReader(h.WSDL))
 	stack := make([]xml.StartElement, 0, 8)
@@ -260,8 +274,7 @@ func (h *SOAPHandler) justRawXML(soapAction string) bool {
 			}
 		}
 	}
-	_, ok := h.rawXML[soapAction]
-	return ok
+	return check(soapAction)
 }
 
 func mayFilterEmptyTags(r *http.Request, Log func(...interface{}) error) {
@@ -352,6 +365,7 @@ func findSoapBody(dec *xml.Decoder) (xml.StartElement, error) {
 		if st, ok = tok.(xml.StartElement); ok {
 			if strings.EqualFold(st.Name.Local, "body") &&
 				(st.Name.Space == "" ||
+					st.Name.Space == "SOAP-ENV" ||
 					st.Name.Space == "http://www.w3.org/2003/05/soap-envelope/" ||
 					st.Name.Space == "http://schemas.xmlsoap.org/soap/envelope/") {
 				return st, nil
