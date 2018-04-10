@@ -282,6 +282,8 @@ var xsdTypeTemplate = template.Must(
 type typer struct {
 	Types       map[string]*descriptor.DescriptorProto
 	inputRawXml map[string]struct{}
+
+	seen map[string]struct{}
 }
 
 func (t *typer) mkType(fullName string, m *descriptor.DescriptorProto) string {
@@ -318,8 +320,9 @@ func (t *typer) mkType(fullName string, m *descriptor.DescriptorProto) string {
 		if tn == "" {
 			continue
 		}
-		subTypes[tn] = append(subTypes[tn],
-			t.Types[f.GetTypeName()].GetField()...)
+		if len(subTypes[tn]) == 0 {
+			subTypes[tn] = t.Types[f.GetTypeName()].GetField()
+		}
 	}
 	type Fields struct {
 		Name   string
@@ -329,12 +332,19 @@ func (t *typer) mkType(fullName string, m *descriptor.DescriptorProto) string {
 		fullName = m.GetName()
 	}
 	typName := mkTypeName(fullName)
-	//log.Println("full:", fullName, "typ:", typName)
+	//log.Println("full:", fullName, "typ:", typName, "len:", len(m.GetField()), "filtered:", len(filterHiddenFields(m.GetField())))
 	fields := Fields{Name: typName, Fields: filterHiddenFields(m.GetField())}
 	if err := elementTypeTemplate.Execute(buf, fields); err != nil {
 		panic(err)
 	}
+	if t.seen == nil {
+		t.seen = make(map[string]struct{})
+	}
 	for k, vv := range subTypes {
+		if _, seen := t.seen[k]; seen {
+			continue
+		}
+		t.seen[k] = struct{}{}
 		if err := xsdTypeTemplate.Execute(buf,
 			Fields{Name: k, Fields: filterHiddenFields(vv)},
 		); err != nil {
