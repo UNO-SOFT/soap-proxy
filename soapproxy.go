@@ -30,7 +30,6 @@ import (
 	//"regexp"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/UNO-SOFT/grpcer"
 	"github.com/pkg/errors"
@@ -102,7 +101,7 @@ func (h *SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if u, p, ok := r.BasicAuth(); ok {
 		ctx = grpcer.WithBasicAuth(ctx, u, p)
 	}
-	ctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	recv, err := h.Call(soapAction, ctx, inp, opts...)
 	if err != nil {
