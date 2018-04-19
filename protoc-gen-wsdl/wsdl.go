@@ -46,7 +46,7 @@ const wsdlTmpl = xml.Header + `<definitions
     xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
     xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/"
     xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/"
-    xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+    xmlns:xs="http://www.w3.org/2001/XMLSchema">
   <documentation>
     Service: {{.Package}}
     Version: {{.Version}}
@@ -54,20 +54,21 @@ const wsdlTmpl = xml.Header + `<definitions
     Owner: {{.Owner}}
   </documentation>
   <types>
-    <xsd:schema elementFormDefault="qualified" targetNamespace="{{.TypesNS}}">
-      <xsd:element name="exception">
-        <xsd:complexType>
-          <xsd:sequence>
-            <xsd:element name="type" nillable="true" type="xsd:string"/>
-            <xsd:element name="message" nillable="true" type="xsd:string"/>
-            <xsd:element name="traceback" nillable="true" type="xsd:string"/>
-          </xsd:sequence>
-        </xsd:complexType>
-      </xsd:element>
+    <xs:schema elementFormDefault="qualified" targetNamespace="{{.TypesNS}}">
+      <xs:element name="exception">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="type" nillable="true" type="xs:string"/>
+            <xs:element name="message" nillable="true" type="xs:string"/>
+            <xs:element name="traceback" nillable="true" type="xs:string"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+	  {{$docu := .Documentation}}
       {{range $k, $m := .Types}}
-        {{mkType $k $m}}
+        {{mkType $k $m $docu}}
       {{end}}
-    </xsd:schema>
+    </xs:schema>
   </types>
   <message name="error">
     <part element="types:exception" name="error"/>
@@ -199,7 +200,7 @@ func Generate(resp *protoc.CodeGeneratorResponse, req protoc.CodeGeneratorReques
 
 					ServiceDescriptorProto: svc,
 					GeneratedAt:            now,
-					Documentation:          make(map[string]string, len(methods)),
+					Documentation:          make(map[string]string),
 				}
 				if si := root.GetSourceCodeInfo(); si != nil {
 					for _, loc := range si.GetLocation() {
@@ -256,14 +257,14 @@ var elementTypeTemplate = template.Must(
 		Funcs(template.FuncMap{
 			"mkXSDElement": mkXSDElement,
 		}).
-		Parse(`<xsd:element name="{{.Name}}">
-  <xsd:complexType>
-    <xsd:sequence>
+		Parse(`<xs:element name="{{.Name}}">
+  <xs:complexType>
+    <xs:sequence>
 	{{range .Fields}}{{mkXSDElement .}}
 	{{end}}
-    </xsd:sequence>
-  </xsd:complexType>
-</xsd:element>
+    </xs:sequence>
+  </xs:complexType>
+</xs:element>
 `))
 
 var xsdTypeTemplate = template.Must(
@@ -271,12 +272,12 @@ var xsdTypeTemplate = template.Must(
 		Funcs(template.FuncMap{
 			"mkXSDElement": mkXSDElement,
 		}).
-		Parse(`<xsd:complexType name="{{.Name}}">
-  <xsd:sequence>
+		Parse(`<xs:complexType name="{{.Name}}">
+  <xs:sequence>
   {{range .Fields}}{{mkXSDElement .}}
   {{end}}
-  </xsd:sequence>
-</xsd:complexType>
+  </xs:sequence>
+</xs:complexType>
 `))
 
 type typer struct {
@@ -286,7 +287,7 @@ type typer struct {
 	seen map[string]struct{}
 }
 
-func (t *typer) mkType(fullName string, m *descriptor.DescriptorProto) string {
+func (t *typer) mkType(fullName string, m *descriptor.DescriptorProto, documentation map[string]string) string {
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	defer func() {
@@ -300,18 +301,51 @@ func (t *typer) mkType(fullName string, m *descriptor.DescriptorProto) string {
 	if len(mFields) == 1 && mFields[0].GetType().String() == "TYPE_STRING" {
 		name := mkTypeName(fullName)
 		var any bool
+		var namePrefix string
+		if t.inputRawXml == nil {
+			t.inputRawXml = make(map[string]struct{})
+		}
+		var isOutput bool
 		if any = strings.HasSuffix(name, "_Input") && mFields[0].GetName() == "p_raw_xml"; any {
-			if t.inputRawXml == nil {
-				t.inputRawXml = make(map[string]struct{})
-			}
-			t.inputRawXml[strings.TrimSuffix(name, "_Input")] = struct{}{}
+			namePrefix = strings.TrimSuffix(name, "_Input")
+			t.inputRawXml[namePrefix] = struct{}{}
 		} else if mFields[0].GetName() == "ret" {
-			_, any = t.inputRawXml[strings.TrimSuffix(name, "_Output")]
+			namePrefix = strings.TrimSuffix(name, "_Output")
+			_, any = t.inputRawXml[namePrefix]
+			isOutput = true
 		}
 		if any {
-			fmt.Fprintf(buf, `<xsd:element name="%s">
-	<xsd:complexType><xsd:sequence><xsd:any /></xsd:sequence></xsd:complexType>
-	</xsd:element>`, name)
+			if documentation != nil {
+				if !isOutput {
+					return ""
+				}
+				if docu := documentation[namePrefix]; docu != "" {
+					xr := xml.NewDecoder(strings.NewReader(docu))
+					var st xml.StartElement
+					for {
+						tok, err := xr.Token()
+						if err != nil {
+							log.Printf("Parse %q of %q as XML: %v", docu, name, err)
+							break
+						}
+						var ok bool
+						if st, ok = tok.(xml.StartElement); ok {
+							break
+						}
+					}
+					if st.Name.Local != "" {
+						if !(st.Name.Local == "schema" && (st.Name.Space == "" || st.Name.Space == "http://www.w3.org/2001/XMLSchema")) {
+							log.Printf("Documentation of %q is XML, but does not start with \"schema\" (but %q)", name, st.Name)
+						} else if strings.Contains(docu, "element name=\""+namePrefix+"_Input\" ") &&
+							strings.Contains(docu, "element name=\""+name+"\" ") {
+							return docu
+						}
+					}
+				}
+			}
+			fmt.Fprintf(buf, `<xs:element name="%s">
+	<xs:complexType><xs:sequence><xs:any /></xs:sequence></xs:complexType>
+	</xs:element>`, name)
 			return buf.String()
 		}
 	}
@@ -388,7 +422,7 @@ func mkXSDElement(f *descriptor.FieldDescriptorProto) string {
 		typ = "types:" + typ
 	}
 	return fmt.Sprintf(
-		`<xsd:element minOccurs="0" nillable="true" maxOccurs="%d" name="%s" type="%s"/>`,
+		`<xs:element minOccurs="0" nillable="true" maxOccurs="%d" name="%s" type="%s"/>`,
 		maxOccurs, name, typ,
 	)
 }
@@ -413,33 +447,33 @@ func mkTypeName(s string) string {
 func xsdType(t descriptor.FieldDescriptorProto_Type) string {
 	switch t {
 	case descriptor.FieldDescriptorProto_TYPE_DOUBLE:
-		return "xsd:double"
+		return "xs:double"
 	case descriptor.FieldDescriptorProto_TYPE_FLOAT:
-		return "xsd:float"
+		return "xs:float"
 	case descriptor.FieldDescriptorProto_TYPE_INT64,
 		descriptor.FieldDescriptorProto_TYPE_FIXED64,
 		descriptor.FieldDescriptorProto_TYPE_SFIXED64,
 		descriptor.FieldDescriptorProto_TYPE_SINT64:
-		return "xsd:long"
+		return "xs:long"
 	case descriptor.FieldDescriptorProto_TYPE_UINT64:
-		return "xsd:unsignedLong"
+		return "xs:unsignedLong"
 	case descriptor.FieldDescriptorProto_TYPE_INT32,
 		descriptor.FieldDescriptorProto_TYPE_FIXED32,
 		descriptor.FieldDescriptorProto_TYPE_SFIXED32,
 		descriptor.FieldDescriptorProto_TYPE_SINT32:
-		return "xsd:int"
+		return "xs:int"
 	case descriptor.FieldDescriptorProto_TYPE_BOOL:
-		return "xsd:bool"
+		return "xs:bool"
 	case descriptor.FieldDescriptorProto_TYPE_STRING:
-		return "xsd:string"
+		return "xs:string"
 	case descriptor.FieldDescriptorProto_TYPE_GROUP:
 		return "?grp?"
 	case descriptor.FieldDescriptorProto_TYPE_MESSAGE:
 		return "?msg?"
 	case descriptor.FieldDescriptorProto_TYPE_BYTES:
-		return "xsd:base64Binary"
+		return "xs:base64Binary"
 	case descriptor.FieldDescriptorProto_TYPE_UINT32:
-		return "xsd:unsignedInt"
+		return "xs:unsignedInt"
 	case descriptor.FieldDescriptorProto_TYPE_ENUM:
 		return "?enum?"
 	}
