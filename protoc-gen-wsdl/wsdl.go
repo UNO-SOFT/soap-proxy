@@ -320,6 +320,7 @@ func (t *typer) mkType(fullName string, m *descriptor.DescriptorProto, documenta
 					return ""
 				}
 				if docu := documentation[namePrefix]; docu != "" {
+					docu = strings.TrimSpace(docu)
 					xr := xml.NewDecoder(strings.NewReader(docu))
 					var st xml.StartElement
 					for {
@@ -338,7 +339,8 @@ func (t *typer) mkType(fullName string, m *descriptor.DescriptorProto, documenta
 							log.Printf("Documentation of %q is XML, but does not start with \"schema\" (but %q)", name, st.Name)
 						} else if strings.Contains(docu, "element name=\""+namePrefix+"_Input\" ") &&
 							strings.Contains(docu, "element name=\""+name+"\" ") {
-							return docu
+							delete(documentation, namePrefix)
+							return docu[int(xr.InputOffset()):strings.LastIndex(docu, "</")]
 						}
 					}
 				}
