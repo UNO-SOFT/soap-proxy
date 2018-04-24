@@ -188,6 +188,7 @@ func (h *SOAPHandler) decodeRequest(r *http.Request) (string, interface{}, error
 	if i := strings.IndexByte(soapAction, '/'); i >= 0 {
 		soapAction = soapAction[i+1:]
 	}
+	h.Log("soapAction", soapAction, "justRawXML", h.justRawXML(soapAction))
 	if h.justRawXML(soapAction) {
 		// Just read the inner XML, and provide it as the string into inp.PRawXml
 		type anyXML struct {
@@ -272,6 +273,7 @@ func (h *SOAPHandler) justRawXML(soapAction string) (isRaw bool) {
 		if err != nil {
 			break
 		}
+		//h.Log("tok", fmt.Sprintf("%T:%+v", tok, tok))
 		switch x := tok.(type) {
 		case xml.StartElement:
 			if x.Name.Local == "any" && (x.Name.Space == "" || x.Name.Space == "http://www.w3.org/2001/XMLSchema") {
@@ -284,6 +286,10 @@ func (h *SOAPHandler) justRawXML(soapAction string) (isRaw bool) {
 				}
 			}
 			stack = append(stack, x)
+		case xml.CharData:
+			if len(stack) > 1 && stack[len(stack)-1].Name.Local == "documentation" {
+				h.rawXML[string(bytes.TrimPrefix(x, []byte("RAWXML:")))] = struct{}{}
+			}
 		case xml.EndElement:
 			stack = stack[:len(stack)-1]
 		}
