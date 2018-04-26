@@ -54,7 +54,7 @@ const wsdlTmpl = xml.Header + `<definitions
     Owner: {{.Owner}}
   </documentation>
   <types>
-    <xs:schema elementFormDefault="qualified" targetNamespace="{{.TypesNS}}">
+    <xs:schema elementFormDefault="unqualified" targetNamespace="{{.TypesNS}}">
       <xs:element name="exception">
         <xs:complexType>
           <xs:sequence>
