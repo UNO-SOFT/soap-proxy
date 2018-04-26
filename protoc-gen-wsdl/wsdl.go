@@ -206,6 +206,14 @@ func Generate(resp *protoc.CodeGeneratorResponse, req protoc.CodeGeneratorReques
 					for _, loc := range si.GetLocation() {
 						if path := loc.GetPath(); len(path) == 4 && path[0] == 6 && path[1] == int32(svcNo) && path[2] == 2 {
 							s := strings.TrimPrefix(strings.Replace(loc.GetLeadingComments(), "\n/", "\n", -1), "/")
+
+							const nsEq = "REPLACE namespace=\""
+							if i := strings.Index(s, nsEq); i >= 0 {
+								i += len(nsEq)
+								if j := strings.IndexByte(s[i:], '"'); j >= 0 {
+									s = strings.Replace(s, s[i:i+j], data.TypesNS, -1)
+								}
+							}
 							data.Documentation[methods[int(path[3])].GetName()] = s
 						}
 					}
