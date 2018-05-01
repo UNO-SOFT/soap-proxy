@@ -34,10 +34,10 @@ func TestRawXML(t *testing.T) {
 		t.Fatal(err)
 	}
 	h := &SOAPHandler{WSDL: string(b)}
-	if !h.justRawXML("DbWebGdpr_Keres") {
+	if !h.annotation("DbWebGdpr_Keres").Raw {
 		t.Error("DbWebGdpdr_Keres: wanted true, got false")
 	}
-	if h.justRawXML("DbWebGdpr_Kereses") {
+	if h.annotation("DbWebGdpr_Kereses").Raw {
 		t.Error("DbWebGdpdr_Kereses: wanted false, got true")
 	}
 }
@@ -109,6 +109,39 @@ func TestXMLDecode(t *testing.T) {
 	log.Printf("Decoded: %#v", inp)
 	if inp.PLoginNev == "" {
 		t.Errorf("empty struct: %#v", inp)
+	}
+}
+
+func TestRemoveNS(t *testing.T) {
+	const rawXML = `<gdpr:GDPRRequest>
+   <GDPR_REQUEST_HEADER>
+         <SystemID>BIZTALK</SystemID>
+         <RequestID>44206876</RequestID>
+         <RequestDate>2018-01-01</RequestDate>
+         <RequestType>SEARCH</RequestType>
+         <DataSubjectType>CUSTOMER</DataSubjectType>
+         <TargetSystemID>123</TargetSystemID>
+         <TransactionID>3A8159D452460018E0530A41F02437D12</TransactionID>
+   </GDPR_REQUEST_HEADER>
+   <PERSON_ITEMS>
+<GDPRPerson><StartDate>1953-04-20</StartDate><LastName>Andras</LastName><FirstName>Huszti</FirstName><BirthCity>BUDAPEST</BirthCity><MotherLastName>Kiss Gizi</MotherLastName></GDPRPerson>
+
+<GDPRPerson><ClaimList><GDPRClaim><ID>KKCL-009027228T-1</ID></GDPRClaim></ClaimList></GDPRPerson>
+<GDPRPerson><EMailAddressList><GDPREMailAddress><Text>hajdumarcsi.580303@googmail.hu</Text></GDPREMailAddress></EMailAddressList><SimplifiedContractList><GDPRSimplifiedContract><ContractId>365128</ContractId></GDPRSimplifiedContract></SimplifiedContractList></GDPRPerson>
+<GDPRPerson><EMailAddressList><GDPREMailAddress><Text>muranyi.jozsef@hdsnet.hu</Text></GDPREMailAddress></EMailAddressList><SimplifiedContractList><GDPRSimplifiedContract><ContractId>31685769</ContractId></GDPRSimplifiedContract></SimplifiedContractList></GDPRPerson>
+</PERSON_ITEMS>
+</gdpr:GDPRRequest>`
+
+	request := requestInfo{Annotation: Annotation{Raw: true, RemoveNS: true}}
+	got := request.TrimInput(rawXML)
+
+	if got != strings.Replace(rawXML, "gdpr:GDPRRequest>", "GDPRRequest>", 2) {
+		t.Error(got)
+	}
+
+	got2 := request.TrimInput(got)
+	if got2 != got {
+		t.Error(got2)
 	}
 }
 

@@ -211,7 +211,13 @@ func Generate(resp *protoc.CodeGeneratorResponse, req protoc.CodeGeneratorReques
 							if i := strings.Index(s, nsEq); i >= 0 {
 								i += len(nsEq)
 								if j := strings.IndexByte(s[i:], '"'); j >= 0 {
-									s = strings.Replace(s, s[i:i+j], data.TypesNS, -1)
+									tbr := s[i : i+j]
+									// remove <!-- REPLACE namespace="..." -->
+									i = strings.LastIndex(s[:i], "<!--")
+									j += strings.Index(s[j:], "-->")
+									s = s[:i] + s[j+3:]
+									// replace namespace to TypesNS
+									s = strings.Replace(s, tbr, data.TypesNS, -1)
 								}
 							}
 							data.Documentation[methods[int(path[3])].GetName()] = s

@@ -46,7 +46,12 @@ type SOAPHandler struct {
 	Locations []string
 
 	wsdlWithLocations string
-	rawXML            map[string]struct{}
+	annotations       map[string]Annotation
+}
+
+type Annotation struct {
+	Raw      bool
+	RemoveNS bool
 }
 
 func (h *SOAPHandler) Input(name string) interface{} {
@@ -59,7 +64,6 @@ func (h *SOAPHandler) Input(name string) interface{} {
 	return nil
 }
 
-//var rEmptyTag = regexp.MustCompile(`<[^>]+/>|<([^ >]+)[^>]*></[^>]+>`)
 var bufPool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]byte, 0, 1024)) }}
 
 func (h *SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -77,7 +81,7 @@ func (h *SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	mayFilterEmptyTags(r, Log)
 
-	soapAction, inp, err := h.decodeRequest(r)
+	request, inp, err := h.decodeRequest(r)
 	if err != nil {
 		Log("msg", "decode", "into", fmt.Sprintf("%T", inp), "error", err)
 		switch errors.Cause(err) {
@@ -94,7 +98,7 @@ func (h *SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	buf.Reset()
 	jenc := json.NewEncoder(buf)
 	_ = jenc.Encode(inp)
-	Log("msg", "Calling", "soapAction", soapAction, "inp", buf.String())
+	Log("msg", "Calling", "soapAction", request.SOAPAction, "inp", buf.String())
 
 	var opts []grpc.CallOption
 	ctx := context.Background()
@@ -103,17 +107,23 @@ func (h *SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	recv, err := h.Call(soapAction, ctx, inp, opts...)
+	recv, err := h.Call(request.SOAPAction, ctx, inp, opts...)
 	if err != nil {
-		Log("call", soapAction, "inp", inp, "error", err)
+		Log("call", request.SOAPAction, "inp", inp, "error", err)
 		soapError(w, err)
 		return
 	}
 
-	h.encodeResponse(w, recv, soapAction, Log)
+	h.encodeResponse(w, recv, request, Log)
 }
 
-func (h *SOAPHandler) encodeResponse(w http.ResponseWriter, recv grpcer.Receiver, soapAction string, Log func(...interface{}) error) {
+type requestInfo struct {
+	Annotation
+	SOAPAction      string
+	Prefix, Postfix string
+}
+
+func (h *SOAPHandler) encodeResponse(w http.ResponseWriter, recv grpcer.Receiver, request requestInfo, Log func(...interface{}) error) {
 	w.Header().Set("Content-Type", "text/xml")
 	fmt.Fprintf(w, xml.Header+`<soap:Envelope
 	xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
@@ -127,7 +137,6 @@ func (h *SOAPHandler) encodeResponse(w http.ResponseWriter, recv grpcer.Receiver
 		encodeSoapFault(w, err)
 		return
 	}
-	isRaw := h.justRawXML(soapAction)
 	typName := strings.TrimPrefix(fmt.Sprintf("%T", part), "*")
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
@@ -138,15 +147,15 @@ func (h *SOAPHandler) encodeResponse(w http.ResponseWriter, recv grpcer.Receiver
 	for {
 		buf.Reset()
 		_ = jenc.Encode(part)
-		Log("recv", buf.String(), "type", typName, "soapAction", soapAction)
+		Log("recv", buf.String(), "type", typName, "soapAction", request.SOAPAction)
 		buf.Reset()
-		if isRaw {
-			io.WriteString(mw, "<"+soapAction+"_Output>")
+		if request.Raw {
+			fmt.Fprintf(mw, "<%s%s_Output%s>", request.Prefix, request.SOAPAction, request.Postfix)
 			io.WriteString(mw, reflect.ValueOf(part).Elem().Field(0).String())
-			io.WriteString(mw, "</"+soapAction+"_Output>")
+			fmt.Fprintf(mw, "</%s%s_Output>", request.Prefix, request.SOAPAction)
 		} else if strings.HasSuffix(typName, "_Output") {
 			err = enc.EncodeElement(part,
-				xml.StartElement{Name: xml.Name{Local: soapAction + "_Output"}},
+				xml.StartElement{Name: xml.Name{Local: request.SOAPAction + "_Output"}},
 			)
 		} else {
 			err = enc.Encode(part)
@@ -171,7 +180,7 @@ var (
 	errNotFound = errors.New("not found")
 )
 
-func (h *SOAPHandler) decodeRequest(r *http.Request) (string, interface{}, error) {
+func (h *SOAPHandler) decodeRequest(r *http.Request) (requestInfo, interface{}, error) {
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
 	buf.Reset()
@@ -179,53 +188,67 @@ func (h *SOAPHandler) decodeRequest(r *http.Request) (string, interface{}, error
 	dec := xml.NewDecoder(io.TeeReader(r.Body, buf))
 	st, err := findSoapBody(dec)
 	if err != nil {
-		return "", nil, errors.WithMessage(err, "findSoapBody in "+buf.String())
+		return requestInfo{}, nil, errors.WithMessage(err, "findSoapBody in "+buf.String())
 	}
-	soapAction := strings.Trim(r.Header.Get("SOAPAction"), `"`)
-	if i := strings.LastIndex(soapAction, ".proto/"); i >= 0 {
-		soapAction = soapAction[i+7:]
+	request := requestInfo{SOAPAction: strings.Trim(r.Header.Get("SOAPAction"), `"`)}
+	if i := strings.LastIndex(request.SOAPAction, ".proto/"); i >= 0 {
+		request.SOAPAction = request.SOAPAction[i+7:]
 	}
-	if i := strings.IndexByte(soapAction, '/'); i >= 0 {
-		soapAction = soapAction[i+1:]
+	if i := strings.IndexByte(request.SOAPAction, '/'); i >= 0 {
+		request.SOAPAction = request.SOAPAction[i+1:]
 	}
-	h.Log("soapAction", soapAction, "justRawXML", h.justRawXML(soapAction))
-	if h.justRawXML(soapAction) {
-		// Just read the inner XML, and provide it as the string into inp.PRawXml
-		type anyXML struct {
-			RawXML string `xml:",innerxml"`
+	request.Annotation = h.annotation(request.SOAPAction)
+	h.Log("soapAction", request.SOAPAction, "justRawXML", request.Raw)
+	if request.Raw {
+		startPos := dec.InputOffset()
+		if err = dec.Skip(); err != nil {
+			return request, nil, err
 		}
-		var any anyXML
-		if err := dec.DecodeElement(&any, &st); err != nil {
-			return soapAction, nil, errors.Wrapf(errDecode, "into %T: %v\n%s", any, err, buf.String())
-		}
-		inp := h.Input(soapAction)
-		h.Log("any", any, "inp", inp, "T", fmt.Sprintf("%T", inp))
-		reflect.ValueOf(inp).Elem().Field(0).SetString(any.RawXML)
-		return soapAction, inp, nil
+		b := bytes.TrimSpace(buf.Bytes()[startPos:dec.InputOffset()])
+		b = b[:bytes.LastIndex(b, []byte("</"))]
+
+		rawXML := string(b)
+		/*
+			// Just read the inner XML, and provide it as the string into inp.PRawXml
+			type anyXML struct {
+				RawXML string `xml:",innerxml"`
+			}
+			var any anyXML
+			if err := dec.DecodeElement(&any, &st); err != nil {
+				return request, nil, errors.Wrapf(errDecode, "into %T: %v\n%s", any, err, buf.String())
+			}
+		*/
+		rawXML = request.TrimInput(rawXML)
+		h.Log("prefix", request.Prefix, "postfix", request.Postfix)
+
+		inp := h.Input(request.SOAPAction)
+		h.Log("rawXML", rawXML, "inp", inp, "T", fmt.Sprintf("%T", inp))
+		reflect.ValueOf(inp).Elem().Field(0).SetString(rawXML)
+		return request, inp, nil
 	}
 	if st, err = nextStart(dec); err != nil {
-		return "", nil, err
+		return request, nil, err
 	}
 
-	if soapAction == "" {
-		soapAction = st.Name.Local
+	if request.SOAPAction == "" {
+		request.SOAPAction = st.Name.Local
 	}
-	inp := h.Input(soapAction)
+	inp := h.Input(request.SOAPAction)
 	if inp == nil {
-		if i := strings.LastIndexByte(soapAction, '/'); i >= 0 {
-			if inp = h.Input(soapAction[i+1:]); inp != nil {
-				soapAction = soapAction[i+1:]
+		if i := strings.LastIndexByte(request.SOAPAction, '/'); i >= 0 {
+			if inp = h.Input(request.SOAPAction[i+1:]); inp != nil {
+				request.SOAPAction = request.SOAPAction[i+1:]
 			}
 		}
 		if inp == nil {
-			return soapAction, nil, errors.Wrapf(errNotFound, "no input for %q", soapAction)
+			return request, nil, errors.Wrapf(errNotFound, "no input for %q", request.SOAPAction)
 		}
 	}
 
 	if err = dec.DecodeElement(inp, &st); err != nil {
 		err = errors.Wrapf(errDecode, "into %T: %v\n%s", inp, err, buf.String())
 	}
-	return soapAction, inp, err
+	return request, inp, err
 }
 
 func (h *SOAPHandler) getWSDL() string {
@@ -245,26 +268,29 @@ func (h *SOAPHandler) getWSDL() string {
 	return h.wsdlWithLocations
 }
 
-func (h *SOAPHandler) justRawXML(soapAction string) (isRaw bool) {
+func (h *SOAPHandler) annotation(soapAction string) (annotation Annotation) {
 	defer func() {
-		h.Log("msg", "justRawXML", "soapAction", soapAction, "result", isRaw)
+		if h == nil || h.Log == nil {
+			return
+		}
+		h.Log("soapAction", soapAction, "annotation", annotation)
 	}()
-	check := func(soapAction string) bool {
+
+	get := func(soapAction string) Annotation {
 		var ok bool
-		if _, ok = h.rawXML[soapAction]; ok {
-			return true
+		if annotation, ok = h.annotations[soapAction]; ok {
+			return annotation
 		}
 		if i := strings.LastIndexByte(soapAction, '/'); i >= 0 {
-			_, ok = h.rawXML[soapAction[i+1:]]
+			annotation = h.annotations[soapAction[i+1:]]
 		}
-		return ok
+		return annotation
+	}
+	if h.annotations != nil {
+		return get(soapAction)
 	}
 
-	if h.rawXML != nil {
-		return check(soapAction)
-	}
-
-	h.rawXML = make(map[string]struct{})
+	h.annotations = make(map[string]Annotation)
 	dec := xml.NewDecoder(strings.NewReader(h.WSDL))
 	stack := make([]xml.StartElement, 0, 8)
 	names := make(map[string]struct{})
@@ -288,7 +314,21 @@ func (h *SOAPHandler) justRawXML(soapAction string) (isRaw bool) {
 			stack = append(stack, x)
 		case xml.CharData:
 			if len(stack) > 1 && stack[len(stack)-1].Name.Local == "documentation" {
-				h.rawXML[string(bytes.TrimPrefix(x, []byte("RAWXML:")))] = struct{}{}
+				x = bytes.TrimSpace(x)
+				if bytes.HasPrefix(x, []byte{'{'}) {
+					m := make(map[string]Annotation)
+					if err = json.NewDecoder(bytes.NewReader(x)).Decode(&m); err != nil {
+						h.Log("msg", "parse", "documentation", string(x), "error", err)
+					} else {
+						if h.annotations == nil {
+							h.annotations = m
+						} else {
+							for k, v := range m {
+								h.annotations[k] = v
+							}
+						}
+					}
+				}
 			}
 		case xml.EndElement:
 			stack = stack[:len(stack)-1]
@@ -298,11 +338,13 @@ func (h *SOAPHandler) justRawXML(soapAction string) (isRaw bool) {
 		k := strings.TrimSuffix(nm, "_Input")
 		if k != nm {
 			if _, ok := names[k+"_Output"]; ok {
-				h.rawXML[k] = struct{}{}
+				a := h.annotations[k]
+				a.Raw = true
+				h.annotations[k] = a
 			}
 		}
 	}
-	return check(soapAction)
+	return get(soapAction)
 }
 
 func mayFilterEmptyTags(r *http.Request, Log func(...interface{}) error) {
@@ -494,6 +536,28 @@ func FilterEmptyTags(w io.Writer, r io.Reader) error {
 	}
 	Unwrite()
 	return enc.Flush()
+}
+
+func (request *requestInfo) TrimInput(rawXML string) string {
+	rawXML = strings.TrimSpace(rawXML)
+	if !request.RemoveNS {
+		return rawXML
+	}
+	if i := strings.IndexByte(rawXML, ':'); i >= 0 && !strings.ContainsAny(rawXML[:i], "> =") {
+
+		request.Prefix = rawXML[1:i]
+		rawXML = "<" + rawXML[i+1:]
+		if i = strings.LastIndex(rawXML, "</"+request.Prefix+":"); i >= 0 {
+			rawXML = rawXML[:i+2] + rawXML[i+2+len(request.Prefix)+1:]
+		}
+	}
+	if i := strings.IndexByte(rawXML, '>'); i >= 0 {
+		if j := strings.IndexByte(rawXML[:i], ' '); j >= 0 {
+			request.Postfix = rawXML[j:i]
+			rawXML = rawXML[:j] + rawXML[i:]
+		}
+	}
+	return rawXML
 }
 
 // vim: set fileencoding=utf-8 noet:
