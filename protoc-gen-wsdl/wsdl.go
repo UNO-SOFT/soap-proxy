@@ -348,13 +348,17 @@ func (t *typer) mkType(fullName string, m *descriptor.DescriptorProto, documenta
 							break
 						}
 					}
+					//log.Printf("st=%+v namePrefix=%q", st, namePrefix)
 					if st.Name.Local != "" {
 						if !(st.Name.Local == "schema" && (st.Name.Space == "" || st.Name.Space == "http://www.w3.org/2001/XMLSchema")) {
 							log.Printf("Documentation of %q is XML, but does not start with \"schema\" (but %q)", name, st.Name)
-						} else if strings.Contains(docu, "element name=\""+namePrefix+"_Input\" ") &&
+						} else if strings.Contains(docu, "element name=\""+namePrefix+"_Input\"") &&
 							strings.Contains(docu, "element name=\""+name+"\" ") {
 							delete(documentation, namePrefix)
+
 							return docu[int(xr.InputOffset()):strings.LastIndex(docu, "</")]
+							//} else {
+							//	log.Printf("no %q element in %q", namePrefix+"_Input", docu)
 						}
 					}
 				}

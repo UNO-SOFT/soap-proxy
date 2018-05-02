@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"reflect"
 	//"regexp"
@@ -208,16 +209,6 @@ func (h *SOAPHandler) decodeRequest(r *http.Request) (requestInfo, interface{}, 
 		b = b[:bytes.LastIndex(b, []byte("</"))]
 
 		rawXML := string(b)
-		/*
-			// Just read the inner XML, and provide it as the string into inp.PRawXml
-			type anyXML struct {
-				RawXML string `xml:",innerxml"`
-			}
-			var any anyXML
-			if err := dec.DecodeElement(&any, &st); err != nil {
-				return request, nil, errors.Wrapf(errDecode, "into %T: %v\n%s", any, err, buf.String())
-			}
-		*/
 		rawXML = request.TrimInput(rawXML)
 		h.Log("prefix", request.Prefix, "postfix", request.Postfix)
 
@@ -540,23 +531,67 @@ func FilterEmptyTags(w io.Writer, r io.Reader) error {
 
 func (request *requestInfo) TrimInput(rawXML string) string {
 	rawXML = strings.TrimSpace(rawXML)
+	dec := xml.NewDecoder(strings.NewReader(rawXML))
+	//var startPos int64
+	var st xml.StartElement
+	var err error
+	for !strings.HasSuffix(st.Name.Local, "_Input") {
+		//startPos = dec.InputOffset()
+		if st, err = nextStart(dec); err != nil {
+			log.Println(err)
+			break
+		}
+	}
+	//log.Printf("st=%+v err=%+v", st, err)
+	var attrs []xml.Attr
+	//var firstLine string
+	if err == nil {
+		attrs = append(attrs, st.Attr...)
+		endPos := dec.InputOffset()
+		//firstLine = rawXML[startPos:endPos]
+		//log.Println("X:", firstLine)
+
+		nextStart(dec)
+		dec.Skip()
+		rawXML = strings.TrimSpace(rawXML[endPos:dec.InputOffset()])
+		//log.Println("rawXML:", rawXML)
+	}
+
 	if !request.RemoveNS {
 		return rawXML
 	}
-	if i := strings.IndexByte(rawXML, ':'); i >= 0 && !strings.ContainsAny(rawXML[:i], "> =") {
+	var buf strings.Builder
+	var globalNS xml.Attr
+	otherNS := make([]xml.Attr, 0, len(attrs))
+	for _, attr := range attrs {
+		if attr.Name.Space == "_xmlns" {
+			attr.Name.Local, attr.Name.Space = "xmlns", attr.Name.Local
+		}
+		if attr.Name.Local != "xmlns" {
+			continue
+		}
+		if attr.Name.Space == "" {
+			globalNS = attr
+		} else {
+			otherNS = append(otherNS, attr)
+		}
+	}
 
-		request.Prefix = rawXML[1:i]
-		rawXML = "<" + rawXML[i+1:]
-		if i = strings.LastIndex(rawXML, "</"+request.Prefix+":"); i >= 0 {
-			rawXML = rawXML[:i+2] + rawXML[i+2+len(request.Prefix)+1:]
-		}
+	if len(otherNS) == 0 && globalNS.Value != "" {
+		otherNS = append(otherNS, globalNS)
 	}
-	if i := strings.IndexByte(rawXML, '>'); i >= 0 {
-		if j := strings.IndexByte(rawXML[:i], ' '); j >= 0 {
-			request.Postfix = rawXML[j:i]
-			rawXML = rawXML[:j] + rawXML[i:]
+	for _, attr := range otherNS {
+		if attr.Name.Space != "" && request.Prefix == "" {
+			request.Prefix = attr.Name.Space + ":"
 		}
+		buf.WriteByte(' ')
+		nm := strings.TrimSuffix(attr.Name.Local+":"+attr.Name.Space, ":")
+		buf.WriteString(nm)
+		buf.WriteString(`="`)
+		xml.EscapeText(&buf, []byte(attr.Value))
+		buf.WriteByte('"')
 	}
+	request.Postfix = buf.String()
 	return rawXML
 }
 
