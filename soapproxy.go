@@ -42,9 +42,11 @@ import (
 // WSDL is served on GET requests.
 type SOAPHandler struct {
 	grpcer.Client
-	WSDL      string
-	Log       func(keyvals ...interface{}) error
-	Locations []string
+	WSDL         string
+	Log          func(keyvals ...interface{}) error
+	Locations    []string
+	DecodeInput  func(string, *xml.Decoder) (interface{}, error)
+	EncodeOutput func(*xml.Encoder, interface{}) error
 
 	wsdlWithLocations string
 	annotations       map[string]Annotation
@@ -158,6 +160,8 @@ func (h *SOAPHandler) encodeResponse(w http.ResponseWriter, recv grpcer.Receiver
 			err = enc.EncodeElement(part,
 				xml.StartElement{Name: xml.Name{Local: request.SOAPAction + "_Output"}},
 			)
+		} else if h.EncodeOutput != nil {
+			err = h.EncodeOutput(enc, part)
 		} else {
 			err = enc.Encode(part)
 		}
@@ -224,7 +228,13 @@ func (h *SOAPHandler) decodeRequest(r *http.Request) (requestInfo, interface{}, 
 	if request.SOAPAction == "" {
 		request.SOAPAction = st.Name.Local
 	}
-	inp := h.Input(request.SOAPAction)
+	var inp interface{}
+	if h.DecodeInput != nil {
+		inp, err := h.DecodeInput(request.SOAPAction, dec)
+		return request, inp, err
+	}
+
+	inp = h.Input(request.SOAPAction)
 	if inp == nil {
 		if i := strings.LastIndexByte(request.SOAPAction, '/'); i >= 0 {
 			if inp = h.Input(request.SOAPAction[i+1:]); inp != nil {
