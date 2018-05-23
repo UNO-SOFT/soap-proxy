@@ -45,7 +45,7 @@ type SOAPHandler struct {
 	WSDL         string
 	Log          func(keyvals ...interface{}) error
 	Locations    []string
-	DecodeInput  func(string, *xml.Decoder) (interface{}, error)
+	DecodeInput  func(*string, *xml.Decoder, *xml.StartElement) (interface{}, error)
 	EncodeOutput func(*xml.Encoder, interface{}) error
 
 	wsdlWithLocations string
@@ -112,7 +112,7 @@ func (h *SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	recv, err := h.Call(request.SOAPAction, ctx, inp, opts...)
 	if err != nil {
-		Log("call", request.SOAPAction, "inp", inp, "error", err)
+		Log("call", request.SOAPAction, "inp", fmt.Sprintf("%+v", inp), "error", err)
 		soapError(w, err)
 		return
 	}
@@ -156,12 +156,12 @@ func (h *SOAPHandler) encodeResponse(w http.ResponseWriter, recv grpcer.Receiver
 			fmt.Fprintf(mw, "<%s%s_Output%s>", request.Prefix, request.SOAPAction, request.Postfix)
 			io.WriteString(mw, reflect.ValueOf(part).Elem().Field(0).String())
 			fmt.Fprintf(mw, "</%s%s_Output>", request.Prefix, request.SOAPAction)
+		} else if h.EncodeOutput != nil {
+			err = h.EncodeOutput(enc, part)
 		} else if strings.HasSuffix(typName, "_Output") {
 			err = enc.EncodeElement(part,
 				xml.StartElement{Name: xml.Name{Local: request.SOAPAction + "_Output"}},
 			)
-		} else if h.EncodeOutput != nil {
-			err = h.EncodeOutput(enc, part)
 		} else {
 			err = enc.Encode(part)
 		}
@@ -230,7 +230,7 @@ func (h *SOAPHandler) decodeRequest(r *http.Request) (requestInfo, interface{}, 
 	}
 	var inp interface{}
 	if h.DecodeInput != nil {
-		inp, err := h.DecodeInput(request.SOAPAction, dec)
+		inp, err := h.DecodeInput(&request.SOAPAction, dec, &st)
 		return request, inp, err
 	}
 
