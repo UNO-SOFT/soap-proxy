@@ -28,6 +28,7 @@ import (
 	"log"
 	"net/http"
 	"reflect"
+	"time"
 	//"regexp"
 	"strings"
 	"sync"
@@ -37,6 +38,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 )
+
+var DefaultTimeout = 5 * time.Minute
 
 // SOAPHandler is a http.Handler which proxies SOAP requests to the Client.
 // WSDL is served on GET requests.
@@ -48,6 +51,7 @@ type SOAPHandler struct {
 	DecodeInput  func(*string, *xml.Decoder, *xml.StartElement) (interface{}, error)
 	EncodeOutput func(*xml.Encoder, interface{}) error
 
+	Timeout           time.Duration
 	wsdlWithLocations string
 	annotations       map[string]Annotation
 }
@@ -108,7 +112,11 @@ func (h *SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if u, p, ok := r.BasicAuth(); ok {
 		ctx = grpcer.WithBasicAuth(ctx, u, p)
 	}
-	ctx, cancel := context.WithCancel(ctx)
+	timeout := h.Timeout
+	if timeout == 0 {
+		timeout = DefaultTimeout
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	recv, err := h.Call(request.SOAPAction, ctx, inp, opts...)
 	if err != nil {
