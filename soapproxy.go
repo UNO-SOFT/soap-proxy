@@ -75,8 +75,9 @@ var bufPool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]
 
 func (h *SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
+	ctx := r.Context()
 	Log := h.Log
-	if logger, ok := r.Context().Value("logger").(interface {
+	if logger, ok := ctx.Value("logger").(interface {
 		Log(...interface{}) error
 	}); ok {
 		Log = logger.Log
@@ -108,16 +109,20 @@ func (h *SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	Log("msg", "Calling", "soapAction", request.SOAPAction, "inp", buf.String())
 
 	var opts []grpc.CallOption
-	ctx := context.Background()
 	if u, p, ok := r.BasicAuth(); ok {
 		ctx = grpcer.WithBasicAuth(ctx, u, p)
 	}
-	timeout := h.Timeout
-	if timeout == 0 {
-		timeout = DefaultTimeout
+	if _, ok := ctx.Deadline(); !ok {
+		timeout := h.Timeout
+		if timeout == 0 {
+			timeout = DefaultTimeout
+		}
+		if timeout > 0 {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, timeout)
+			defer cancel()
+		}
 	}
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
 	recv, err := h.Call(request.SOAPAction, ctx, inp, opts...)
 	if err != nil {
 		Log("call", request.SOAPAction, "inp", fmt.Sprintf("%+v", inp), "error", err)
