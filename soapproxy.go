@@ -36,6 +36,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // SOAPHandler is a http.Handler which proxies SOAP requests to the Client.
@@ -366,11 +367,11 @@ func mayFilterEmptyTags(r *http.Request, Log func(...interface{}) error) {
 
 func soapError(w http.ResponseWriter, err error) {
 	w.Header().Set("Content-Type", "text/xml")
-	switch grpc.Code(errors.Cause(err)) {
+	switch st := status.Convert(errors.Cause(err)); st.Code() {
 	case codes.PermissionDenied, codes.Unauthenticated:
 		w.WriteHeader(http.StatusUnauthorized)
 	case codes.Unknown:
-		if desc := grpc.ErrorDesc(err); desc == "bad username or password" {
+		if st.Message() == "bad username or password" {
 			w.WriteHeader(http.StatusUnauthorized)
 		}
 	}
