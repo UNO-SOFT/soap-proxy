@@ -267,19 +267,26 @@ func (h *SOAPHandler) decodeRequest(r *http.Request) (requestInfo, interface{}, 
 }
 
 func (h *SOAPHandler) getWSDL() string {
-	if h.wsdlWithLocations == "" {
-		h.wsdlWithLocations = h.WSDL
-		if len(h.Locations) != 0 {
-			i := strings.LastIndex(h.WSDL, "</port>")
-			if i >= 0 {
-				h.wsdlWithLocations = h.WSDL[:i]
-				for _, loc := range h.Locations {
-					h.wsdlWithLocations += fmt.Sprintf("<soap:address location=%q />\n", loc)
-				}
-				h.wsdlWithLocations += h.WSDL[i:]
-			}
-		}
+	if h.wsdlWithLocations != "" {
+		return h.wsdlWithLocations
 	}
+	h.wsdlWithLocations = h.WSDL
+	if len(h.Locations) < 0 {
+		return h.wsdlWithLocations
+	}
+	i := strings.LastIndex(h.WSDL, "</port>")
+	if i < 0 {
+		return h.wsdlWithLocations
+	}
+	var buf strings.Builder
+	buf.WriteString(h.WSDL[:i])
+	for _, loc := range h.Locations {
+		buf.WriteString(`<soap:address location="`)
+		_ = xml.EscapeText(&buf, []byte(loc))
+		buf.WriteString("\" />\n")
+	}
+	buf.WriteString(h.WSDL[i:])
+	h.wsdlWithLocations = buf.String()
 	return h.wsdlWithLocations
 }
 
