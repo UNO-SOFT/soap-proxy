@@ -236,7 +236,7 @@ func (h *SOAPHandler) decodeRequest(r *http.Request) (requestInfo, interface{}, 
 		return request, inp, nil
 	}
 	if st, err = nextStart(dec); err != nil {
-		return request, nil, err
+		return request, nil, errors.WithMessage(err, buf.String())
 	}
 
 	if request.SOAPAction == "" {
@@ -245,7 +245,7 @@ func (h *SOAPHandler) decodeRequest(r *http.Request) (requestInfo, interface{}, 
 	var inp interface{}
 	if h.DecodeInput != nil {
 		inp, err := h.DecodeInput(&request.SOAPAction, dec, &st)
-		return request, inp, err
+		return request, inp, errors.WithMessage(err, buf.String())
 	}
 
 	inp = h.Input(request.SOAPAction)
