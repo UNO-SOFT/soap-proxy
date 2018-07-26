@@ -29,12 +29,14 @@ import (
 	"net/http"
 	"reflect"
 	"time"
+
 	//"regexp"
 	"strings"
 	"sync"
 
 	"github.com/UNO-SOFT/grpcer"
 	"github.com/pkg/errors"
+	"golang.org/x/net/html/charset"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -204,7 +206,7 @@ func (h *SOAPHandler) decodeRequest(r *http.Request) (requestInfo, interface{}, 
 	defer bufPool.Put(buf)
 	buf.Reset()
 
-	dec := xml.NewDecoder(io.TeeReader(r.Body, buf))
+	dec := newXMLDecoder(io.TeeReader(r.Body, buf))
 	st, err := findSoapBody(dec)
 	if err != nil {
 		return requestInfo{}, nil, errors.WithMessage(err, "findSoapBody in "+buf.String())
@@ -313,7 +315,7 @@ func (h *SOAPHandler) annotation(soapAction string) (annotation Annotation) {
 	}
 
 	h.annotations = make(map[string]Annotation)
-	dec := xml.NewDecoder(strings.NewReader(h.WSDL))
+	dec := newXMLDecoder(strings.NewReader(h.WSDL))
 	stack := make([]xml.StartElement, 0, 8)
 	names := make(map[string]struct{})
 	for {
@@ -499,7 +501,7 @@ func Ungzb64(s string) string {
 }
 
 func FilterEmptyTags(w io.Writer, r io.Reader) error {
-	dec := xml.NewDecoder(r)
+	dec := newXMLDecoder(r)
 	enc := xml.NewEncoder(w)
 	var unwritten []xml.Token
 	Unwrite := func() error {
@@ -624,6 +626,12 @@ func (request *requestInfo) TrimInput(rawXML string) string {
 	}
 	request.Postfix = buf.String()
 	return rawXML
+}
+
+func newXMLDecoder(r io.Reader) *xml.Decoder {
+	dec := xml.NewDecoder(r)
+	dec.CharsetReader = charset.NewReaderLabel
+	return dec
 }
 
 // vim: set fileencoding=utf-8 noet:
