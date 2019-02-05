@@ -5,11 +5,12 @@ require (
 	github.com/360EntSecGroup-Skylar/excelize v1.4.0 // indirect
 	github.com/UNO-SOFT/grpcer v0.1.11
 	github.com/golang/protobuf v1.2.0
-	github.com/pkg/errors v0.8.0
-	github.com/tgulacsi/go v0.2.14 // indirect
+	github.com/pkg/errors v0.8.1
+	github.com/tgulacsi/go v0.2.23 // indirect
 	github.com/tgulacsi/go/dbcsv v0.0.0-20181107111510-a733d4fc0257 // indirect
-	golang.org/x/net v0.0.0-20181114220301-adae6a3d119a
-	golang.org/x/sync v0.0.0-20181108010431-42b317875d0f
-	google.golang.org/genproto v0.0.0-20181109154231-b5d43981345b
-	google.golang.org/grpc v1.16.0
+	github.com/tgulacsi/go/dbcsv/csvdump v0.0.0-20181107111510-a733d4fc0257 // indirect
+	golang.org/x/net v0.0.0-20190125091013-d26f9f9a57f3
+	golang.org/x/sync v0.0.0-20181221193216-37e7f081c4d4
+	google.golang.org/genproto v0.0.0-20190122154452-ba6ebe99b011
+	google.golang.org/grpc v1.17.0
 )
