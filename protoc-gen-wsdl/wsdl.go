@@ -369,15 +369,21 @@ func (t *typer) mkType(fullName string, m *descriptor.DescriptorProto, documenta
 			return buf.String()
 		}
 	}
-	for _, f := range mFields {
-		tn := mkTypeName(f.GetTypeName())
-		if tn == "" {
-			continue
-		}
-		if len(subTypes[tn]) == 0 {
-			subTypes[tn] = t.Types[f.GetTypeName()].GetField()
+	var addFieldSubtypes func(mFields []*descriptor.FieldDescriptorProto)
+	addFieldSubtypes = func(mFields []*descriptor.FieldDescriptorProto) {
+		for _, f := range mFields {
+			tn := mkTypeName(f.GetTypeName())
+			if tn == "" {
+				continue
+			}
+			if len(subTypes[tn]) == 0 {
+				ft := t.Types[f.GetTypeName()].GetField()
+				subTypes[tn] = ft
+				addFieldSubtypes(ft)
+			}
 		}
 	}
+	addFieldSubtypes(mFields)
 	type Fields struct {
 		Name   string
 		Fields []*descriptor.FieldDescriptorProto
@@ -394,6 +400,7 @@ func (t *typer) mkType(fullName string, m *descriptor.DescriptorProto, documenta
 	if t.seen == nil {
 		t.seen = make(map[string]struct{})
 	}
+	//log.Println(fullName, "subTypes:", subTypes)
 	for k, vv := range subTypes {
 		if _, seen := t.seen[k]; seen {
 			continue
