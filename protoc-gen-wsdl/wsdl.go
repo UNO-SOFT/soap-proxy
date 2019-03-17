@@ -369,6 +369,7 @@ func (t *typer) mkType(fullName string, m *descriptor.DescriptorProto, documenta
 			return buf.String()
 		}
 	}
+
 	var addFieldSubtypes func(mFields []*descriptor.FieldDescriptorProto)
 	addFieldSubtypes = func(mFields []*descriptor.FieldDescriptorProto) {
 		for _, f := range mFields {
@@ -384,6 +385,7 @@ func (t *typer) mkType(fullName string, m *descriptor.DescriptorProto, documenta
 		}
 	}
 	addFieldSubtypes(mFields)
+
 	type Fields struct {
 		Name   string
 		Fields []*descriptor.FieldDescriptorProto
@@ -441,7 +443,7 @@ func mkXSDElement(f *descriptor.FieldDescriptorProto) string {
 	name := CamelCase(f.GetName())
 	typ := mkTypeName(f.GetTypeName())
 	if typ == "" {
-		typ = xsdType(f.GetType())
+		typ = xsdType(f.GetType(), f.GetTypeName())
 		if typ == "" {
 			log.Printf("no type name for %s (%s)", f.GetTypeName(), f)
 		}
@@ -455,6 +457,9 @@ func mkXSDElement(f *descriptor.FieldDescriptorProto) string {
 }
 
 func mkTypeName(s string) string {
+	if s == ".google.protobuf.Timestamp" {
+		return ""
+	}
 	s = strings.TrimPrefix(s, ".")
 	if s == "" {
 		return s
@@ -471,7 +476,7 @@ func mkTypeName(s string) string {
 	return s
 }
 
-func xsdType(t descriptor.FieldDescriptorProto_Type) string {
+func xsdType(t descriptor.FieldDescriptorProto_Type, typeName string) string {
 	switch t {
 	case descriptor.FieldDescriptorProto_TYPE_DOUBLE:
 		return "xs:double"
@@ -496,6 +501,9 @@ func xsdType(t descriptor.FieldDescriptorProto_Type) string {
 	case descriptor.FieldDescriptorProto_TYPE_GROUP:
 		return "?grp?"
 	case descriptor.FieldDescriptorProto_TYPE_MESSAGE:
+		if typeName == ".google.protobuf.Timestamp" {
+			return "xs:dateTime"
+		}
 		return "?msg?"
 	case descriptor.FieldDescriptorProto_TYPE_BYTES:
 		return "xs:base64Binary"
