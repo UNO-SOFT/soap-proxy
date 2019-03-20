@@ -96,7 +96,7 @@ const wsdlTmpl = xml.Header + `<definitions
 	{{$docu := .Documentation}}
     {{range .GetMethod}}
     <operation name="{{.Name}}">
-      <wsdl:documentation><![CDATA[{{index $docu .GetName | xmlEscape}}]]></wsdl:documentation>
+	  {{if (ne "" (index $docu .GetName))}}<documentation><![CDATA[{{index $docu .GetName | xmlEscape}}]]></documentation>{{end}}
       <soap:operation soapAction="{{$.TargetNS}}{{.GetName}}" style="document" />
       <input><soap:body use="literal"/></input>
       <output><soap:body use="literal"/></output>
