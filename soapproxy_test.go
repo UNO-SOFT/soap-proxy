@@ -1,4 +1,4 @@
-// Copyright 2017 Tamás Gulácsi
+// Copyright 2019 Tamás Gulácsi
 //
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,15 +17,22 @@ package soapproxy
 
 import (
 	"bytes"
+	"context"
 	"encoding/xml"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/pkg/errors"
+
+	"github.com/UNO-SOFT/grpcer"
+	"google.golang.org/grpc"
 )
 
 func TestRawXML(t *testing.T) {
@@ -72,8 +79,25 @@ soap:encodingStyle="http://www.w3.org/2003/05/soap-encoding">
 func TestSOAPParse(t *testing.T) {
 	st, err := FindBody(xml.NewDecoder(strings.NewReader(xml.Header + `<soap:Envelope
 xmlns:soap="http://www.w3.org/2003/05/soap-envelope/"
-soap:encodingStyle="http://www.w3.org/2003/05/soap-encoding">
-
+soap:encodingStyle="http://www.w3.org/2003/05/soap-encoding"
+xmlns:head="http://services.aegon.hu/Header/">
+   <soap:Header>
+      <head:IMSSOAPHeader>
+         <AuthToken>authToken</AuthToken>
+         <ConnectionStyle>SYNCHRONOUS</ConnectionStyle>
+         <SystemId>103</SystemId>
+         <ActualUserId>0000917174</ActualUserId>
+         <RequestDateTime></RequestDateTime>
+         <ResponseDateTime></ResponseDateTime>
+         <TechnicalUserId>FrontEnd</TechnicalUserId>
+         <ResponseCode></ResponseCode>
+         <ResponseDescription></ResponseDescription>
+         <TargetServiceID>KKNYR</TargetServiceID>
+         <TargetServiceVersion>1.0</TargetServiceVersion>
+         <TransactionID>tran-sact-ion-ID</TransactionID>
+         <ParentTransactionID></ParentTransactionID>
+      </head:IMSSOAPHeader>
+   </soap:Header>
 <soap:Body>
   <m:GetPrice xmlns:m="http://www.w3schools.com/prices">
     <m:Item>Apples</m:Item>
@@ -97,7 +121,7 @@ func TestXMLDecode(t *testing.T) {
 		PJelszo   string `protobuf:"bytes,2,opt,name=p_jelszo,json=pJelszo,proto3" json:"p_jelszo,omitempty"`
 		PAddr     string `protobuf:"bytes,3,opt,name=p_addr,json=pAddr,proto3" json:"p_addr,omitempty"`
 	}
-	dec := xml.NewDecoder(strings.NewReader(`<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><DbDealer_Login><PLoginNev>b0917174</PLoginNev><PJelszo>b0917174</PJelszo></DbDealer_Login></soap:Body></soap:Envelope>`))
+	dec := xml.NewDecoder(strings.NewReader(loginRequest))
 	st, err := FindBody(dec)
 	if err != nil {
 		t.Fatal(err)
@@ -111,6 +135,95 @@ func TestXMLDecode(t *testing.T) {
 		t.Errorf("empty struct: %#v", inp)
 	}
 }
+
+type nullClient struct{}
+
+func (n nullClient) List() []string { return nil }
+func (n nullClient) Input(name string) interface{} {
+	switch name {
+	case "Login":
+		var x struct{ PLoginNev, PJelszo string }
+		return &x
+	}
+	return nil
+}
+func (n nullClient) Call(name string, ctx context.Context, input interface{}, opts ...grpc.CallOption) (grpcer.Receiver, error) {
+	return nil, nil
+}
+
+func TestDecodeRequest(t *testing.T) {
+	h := SOAPHandler{
+		Client: nullClient{},
+		Log: func(keyvals ...interface{}) error {
+			var buf strings.Builder
+			for i := 0; i < len(keyvals); i += 2 {
+				fmt.Fprintf(&buf, "%s=%+v ", keyvals[i], keyvals[i+1])
+			}
+			t.Log(buf.String())
+			return nil
+		},
+
+		DecodeHeader: func(dec *xml.Decoder, st *xml.StartElement) (func(io.Writer) error, error) {
+			var hdr struct {
+				IMSSOAPHeader struct {
+					XMLName                                                                  xml.Name `xml:"IMSSOAPHeader"`
+					AuthToken                                                                string   `xml:"AuthToken"`
+					SystemID                                                                 string   `xml:"SystemId"`
+					ActualUserID                                                             string   `xml:"ActualUserId"`
+					RequestDateTime, ResponseDateTime                                        DateTime
+					TechnicalUserId                                                          string `xml:"TechnicalUserID"`
+					ResponseCode, ResponseDescription, TargetServiceID, TargetServiceVersion string
+					TransactionID, ParentTransactionID                                       string
+				}
+			}
+			if err := dec.DecodeElement(&hdr, st); err != nil {
+				return nil, errors.Wrapf(err, "decode %v", st)
+			}
+			return func(w io.Writer) error {
+				hdr.IMSSOAPHeader.ResponseDateTime.Time = time.Now()
+				return errors.Wrap(xml.NewEncoder(w).Encode(hdr.IMSSOAPHeader), "encode header")
+			}, nil
+		},
+	}
+	req, err := http.NewRequest("POST", "http://example.com", strings.NewReader(loginRequest))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/xml")
+	req.Header.Set("SOAPAction", "Login")
+	info, part, err := h.decodeRequest(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("part: %#v", part)
+	t.Logf("info: %#v", info)
+	var buf strings.Builder
+	if err := info.EncodeHeader(&buf); err != nil {
+		t.Error(err)
+	}
+	t.Log("hdr:", buf.String())
+}
+
+const loginRequest = `<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
+xmlns:head="http://services.aegon.hu/Header/">
+   <soap:Header>
+      <head:IMSSOAPHeader>
+         <AuthToken>authToken</AuthToken>
+         <ConnectionStyle>SYNCHRONOUS</ConnectionStyle>
+         <SystemId>103</SystemId>
+         <ActualUserId>0000917174</ActualUserId>
+		 <RequestDateTime>2006-01-02T15:04:05Z</RequestDateTime>
+         <ResponseDateTime></ResponseDateTime>
+         <TechnicalUserId>FrontEnd</TechnicalUserId>
+         <ResponseCode></ResponseCode>
+         <ResponseDescription></ResponseDescription>
+         <TargetServiceID>KKNYR</TargetServiceID>
+         <TargetServiceVersion>1.0</TargetServiceVersion>
+         <TransactionID>tran-sact-ion-ID</TransactionID>
+         <ParentTransactionID></ParentTransactionID>
+      </head:IMSSOAPHeader>
+   </soap:Header>
+<soap:Body><DbDealer_Login><PLoginNev>b0917174</PLoginNev><PJelszo>b0917174</PJelszo></DbDealer_Login></soap:Body></soap:Envelope>`
 
 func TestRemoveNS(t *testing.T) {
 	const rawXML = `<gdpr:GDPRRequest xmlns:gdpr="http://aegon.hu/exampl/GDPR">

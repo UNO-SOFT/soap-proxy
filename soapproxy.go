@@ -1,4 +1,4 @@
-// Copyright 2017 Tamás Gulácsi
+// Copyright 2019 Tamás Gulácsi
 //
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
@@ -53,6 +53,7 @@ type SOAPHandler struct {
 	Locations    []string
 	DecodeInput  func(*string, *xml.Decoder, *xml.StartElement) (interface{}, error)
 	EncodeOutput func(*xml.Encoder, interface{}) error
+	DecodeHeader func(*xml.Decoder, *xml.StartElement) (func(io.Writer) error, error)
 
 	Timeout           time.Duration
 	wsdlWithLocations string
@@ -140,16 +141,31 @@ type requestInfo struct {
 	Annotation
 	SOAPAction      string
 	Prefix, Postfix string
+	EncodeHeader    func(w io.Writer) error
 }
 
 func (h *SOAPHandler) encodeResponse(w http.ResponseWriter, recv grpcer.Receiver, request requestInfo, Log func(...interface{}) error) {
 	w.Header().Set("Content-Type", "text/xml")
-	fmt.Fprintf(w, xml.Header+`<soap:Envelope
+	io.WriteString(w, xml.Header)
+	io.WriteString(w, `<soap:Envelope
 	xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
 	soap:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
-<soap:Body>
 `)
+	buf := bufPool.Get().(*bytes.Buffer)
+	defer bufPool.Put(buf)
+	if request.EncodeHeader != nil {
+		buf.Reset()
+		if err := request.EncodeHeader(buf); err != nil {
+			Log("EncodeHeader", err)
+		} else {
+			io.WriteString(w, "<soap:Header>\n")
+			w.Write(buf.Bytes())
+			io.WriteString(w, "</soap:Header>\n")
+		}
+	}
+	io.WriteString(w, "<soap:Body>\n")
 	defer func() { io.WriteString(w, "\n</soap:Body></soap:Envelope>") }()
+
 	part, err := recv.Recv()
 	if err != nil {
 		Log("recv-error", err)
@@ -157,8 +173,6 @@ func (h *SOAPHandler) encodeResponse(w http.ResponseWriter, recv grpcer.Receiver
 		return
 	}
 	typName := strings.TrimPrefix(fmt.Sprintf("%T", part), "*")
-	buf := bufPool.Get().(*bytes.Buffer)
-	defer bufPool.Put(buf)
 	buf.Reset()
 	jenc := json.NewEncoder(buf)
 	mw := io.MultiWriter(w, buf)
@@ -212,6 +226,19 @@ func (h *SOAPHandler) decodeRequest(r *http.Request) (requestInfo, interface{}, 
 		return requestInfo{}, nil, errors.WithMessage(err, "findSoapBody in "+buf.String())
 	}
 	request := requestInfo{SOAPAction: strings.Trim(r.Header.Get("SOAPAction"), `"`)}
+	if h.DecodeHeader != nil {
+		hDec := newXMLDecoder(bytes.NewReader(buf.Bytes()))
+		hSt, err := findSoapElt("header", hDec)
+		if err != nil {
+			h.Log("findSoapHeader", err)
+		} else {
+			if request.EncodeHeader, err = h.DecodeHeader(hDec, &hSt); err != nil {
+				h.Log("DecodeHeader", err, "header", buf.String())
+				return request, nil, err
+			}
+		}
+	}
+
 	if i := strings.LastIndex(request.SOAPAction, ".proto/"); i >= 0 {
 		request.SOAPAction = request.SOAPAction[i+7:]
 	}
@@ -449,6 +476,10 @@ func FindBody(dec *xml.Decoder) (xml.StartElement, error) {
 
 // findSoapBody will find the soap:Body StartElement.
 func findSoapBody(dec *xml.Decoder) (xml.StartElement, error) {
+	return findSoapElt("body", dec)
+}
+
+func findSoapElt(name string, dec *xml.Decoder) (xml.StartElement, error) {
 	var st xml.StartElement
 	for {
 		tok, err := dec.Token()
@@ -457,7 +488,7 @@ func findSoapBody(dec *xml.Decoder) (xml.StartElement, error) {
 		}
 		var ok bool
 		if st, ok = tok.(xml.StartElement); ok {
-			if strings.EqualFold(st.Name.Local, "body") &&
+			if strings.EqualFold(st.Name.Local, name) &&
 				(st.Name.Space == "" ||
 					st.Name.Space == "SOAP-ENV" ||
 					st.Name.Space == "http://www.w3.org/2003/05/soap-envelope/" ||
@@ -625,6 +656,39 @@ func newXMLDecoder(r io.Reader) *xml.Decoder {
 	dec := xml.NewDecoder(r)
 	dec.CharsetReader = charset.NewReaderLabel
 	return dec
+}
+
+var _ = xml.Unmarshaler((*DateTime)(nil))
+var _ = xml.Marshaler(DateTime{})
+
+type DateTime struct {
+	time.Time
+}
+
+func (dt *DateTime) UnmarshalXML(dec *xml.Decoder, st xml.StartElement) error {
+	var s string
+	if err := dec.DecodeElement(&s, &st); err != nil {
+		return err
+	}
+	s = strings.TrimSpace(s)
+	n := len(s)
+	if n == 0 {
+		dt.Time = time.Time{}
+		log.Println("time=")
+		return nil
+	}
+	if n > len(time.RFC3339) {
+		n = len(time.RFC3339)
+	} else if n < 4 {
+		n = 4
+	}
+	var err error
+	dt.Time, err = time.Parse(time.RFC3339[:n], s)
+	log.Printf("s=%q time=%v err=%+v", s, dt.Time, err)
+	return err
+}
+func (dt DateTime) MarshalXML(enc *xml.Encoder, start xml.StartElement) error {
+	return enc.EncodeElement(dt.Time.Format(time.RFC3339), start)
 }
 
 // vim: set fileencoding=utf-8 noet:
