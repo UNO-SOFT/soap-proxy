@@ -565,29 +565,22 @@ func FilterEmptyTags(w io.Writer, r io.Reader) error {
 func (request *requestInfo) TrimInput(rawXML string) string {
 	rawXML = strings.TrimSpace(rawXML)
 	dec := xml.NewDecoder(strings.NewReader(rawXML))
-	//var startPos int64
 	var st xml.StartElement
 	var err error
 	for !strings.HasSuffix(st.Name.Local, "_Input") {
-		//startPos = dec.InputOffset()
 		if st, err = nextStart(dec); err != nil {
 			log.Println(err)
 			break
 		}
 	}
-	//log.Printf("st=%+v err=%+v", st, err)
-	var attrs []xml.Attr
-	//var firstLine string
+	attrs := make([]xml.Attr, 0, len(st.Attr))
 	if err == nil {
 		attrs = append(attrs, st.Attr...)
 		endPos := dec.InputOffset()
-		//firstLine = rawXML[startPos:endPos]
-		//log.Println("X:", firstLine)
 
 		nextStart(dec)
 		dec.Skip()
 		rawXML = strings.TrimSpace(rawXML[endPos:dec.InputOffset()])
-		//log.Println("rawXML:", rawXML)
 	}
 
 	if !request.RemoveNS {
