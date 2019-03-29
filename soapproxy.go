@@ -53,7 +53,7 @@ type SOAPHandler struct {
 	Locations    []string
 	DecodeInput  func(*string, *xml.Decoder, *xml.StartElement) (interface{}, error)
 	EncodeOutput func(*xml.Encoder, interface{}) error
-	DecodeHeader func(*xml.Decoder, *xml.StartElement) (func(io.Writer) error, error)
+	DecodeHeader func(context.Context, *xml.Decoder, *xml.StartElement) (context.Context, func(context.Context, io.Writer) error, error)
 
 	Timeout           time.Duration
 	wsdlWithLocations string
@@ -93,7 +93,7 @@ func (h *SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	mayFilterEmptyTags(r, Log)
 
-	request, inp, err := h.decodeRequest(r)
+	request, inp, err := h.decodeRequest(ctx, r)
 	if err != nil {
 		Log("msg", "decode", "into", fmt.Sprintf("%T", inp), "error", err)
 		switch errors.Cause(err) {
@@ -134,17 +134,17 @@ func (h *SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.encodeResponse(w, recv, request, Log)
+	h.encodeResponse(ctx, w, recv, request, Log)
 }
 
 type requestInfo struct {
 	Annotation
 	SOAPAction      string
 	Prefix, Postfix string
-	EncodeHeader    func(w io.Writer) error
+	EncodeHeader    func(context.Context, io.Writer) error
 }
 
-func (h *SOAPHandler) encodeResponse(w http.ResponseWriter, recv grpcer.Receiver, request requestInfo, Log func(...interface{}) error) {
+func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter, recv grpcer.Receiver, request requestInfo, Log func(...interface{}) error) {
 	w.Header().Set("Content-Type", "text/xml")
 	io.WriteString(w, xml.Header)
 	io.WriteString(w, `<soap:Envelope
@@ -155,7 +155,7 @@ func (h *SOAPHandler) encodeResponse(w http.ResponseWriter, recv grpcer.Receiver
 	defer bufPool.Put(buf)
 	if request.EncodeHeader != nil {
 		buf.Reset()
-		if err := request.EncodeHeader(buf); err != nil {
+		if err := request.EncodeHeader(ctx, buf); err != nil {
 			Log("EncodeHeader", err)
 		} else {
 			io.WriteString(w, "<soap:Header>\n")
@@ -215,7 +215,7 @@ var (
 	errNotFound = errors.New("not found")
 )
 
-func (h *SOAPHandler) decodeRequest(r *http.Request) (requestInfo, interface{}, error) {
+func (h *SOAPHandler) decodeRequest(ctx context.Context, r *http.Request) (requestInfo, interface{}, error) {
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
 	buf.Reset()
@@ -232,10 +232,11 @@ func (h *SOAPHandler) decodeRequest(r *http.Request) (requestInfo, interface{}, 
 		if err != nil {
 			h.Log("findSoapHeader", err)
 		} else {
-			if request.EncodeHeader, err = h.DecodeHeader(hDec, &hSt); err != nil {
+			if ctx, request.EncodeHeader, err = h.DecodeHeader(ctx, hDec, &hSt); err != nil {
 				h.Log("DecodeHeader", err, "header", buf.String())
 				return request, nil, err
 			}
+			r = r.WithContext(ctx)
 		}
 	}
 
