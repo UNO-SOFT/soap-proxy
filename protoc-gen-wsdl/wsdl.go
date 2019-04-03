@@ -495,7 +495,7 @@ func xsdType(t descriptor.FieldDescriptorProto_Type, typeName string) string {
 		descriptor.FieldDescriptorProto_TYPE_SINT32:
 		return "xs:int"
 	case descriptor.FieldDescriptorProto_TYPE_BOOL:
-		return "xs:bool"
+		return "xs:boolean"
 	case descriptor.FieldDescriptorProto_TYPE_STRING:
 		return "xs:string"
 	case descriptor.FieldDescriptorProto_TYPE_GROUP:
