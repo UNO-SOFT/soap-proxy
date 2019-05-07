@@ -660,37 +660,4 @@ func newXMLDecoder(r io.Reader) *xml.Decoder {
 	return dec
 }
 
-var _ = xml.Unmarshaler((*DateTime)(nil))
-var _ = xml.Marshaler(DateTime{})
-
-type DateTime struct {
-	time.Time
-}
-
-func (dt *DateTime) UnmarshalXML(dec *xml.Decoder, st xml.StartElement) error {
-	var s string
-	if err := dec.DecodeElement(&s, &st); err != nil {
-		return err
-	}
-	s = strings.TrimSpace(s)
-	n := len(s)
-	if n == 0 {
-		dt.Time = time.Time{}
-		log.Println("time=")
-		return nil
-	}
-	if n > len(time.RFC3339) {
-		n = len(time.RFC3339)
-	} else if n < 4 {
-		n = 4
-	}
-	var err error
-	dt.Time, err = time.Parse(time.RFC3339[:n], s)
-	log.Printf("s=%q time=%v err=%+v", s, dt.Time, err)
-	return err
-}
-func (dt DateTime) MarshalXML(enc *xml.Encoder, start xml.StartElement) error {
-	return enc.EncodeElement(dt.Time.Format(time.RFC3339), start)
-}
-
 // vim: set fileencoding=utf-8 noet:
