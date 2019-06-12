@@ -28,8 +28,8 @@ import (
 	"log"
 	"net/http"
 	"reflect"
+	"strconv"
 	"time"
-
 	//"regexp"
 	"strings"
 	"sync"
@@ -449,7 +449,7 @@ func soapError(w http.ResponseWriter, err error) {
 	encodeSoapFault(w, err)
 	io.WriteString(w, soapEnvelopeFooter)
 }
-func encodeSoapFault(w io.Writer, err error) error {
+func encodeSoapFault(w http.ResponseWriter, err error) error {
 	code := http.StatusInternalServerError
 	cerr := errors.Cause(err)
 	if c, ok := errors.Cause(err).(interface {

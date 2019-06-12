@@ -2,6 +2,7 @@ module github.com/UNO-SOFT/soap-proxy
 
 require (
 	aqwari.net/xml v0.0.0-20181013063537-841f47b2a098
+	github.com/360EntSecGroup-Skylar/excelize v1.3.0 // indirect
 	github.com/UNO-SOFT/grpcer v0.1.12
 	github.com/golang/protobuf v1.2.0
 	github.com/pkg/errors v0.8.1
