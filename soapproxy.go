@@ -450,20 +450,27 @@ func soapError(w http.ResponseWriter, err error) {
 	io.WriteString(w, soapEnvelopeFooter)
 }
 func encodeSoapFault(w io.Writer, err error) error {
-	code := "unknown"
+	code := http.StatusInternalServerError
 	cerr := errors.Cause(err)
 	if c, ok := errors.Cause(err).(interface {
 		Code() int
 	}); ok {
-		code = fmt.Sprintf("%d", c.Code())
+		code = c.Code()
+	} else if cerr == context.Canceled {
+		code = http.StatusFailedDependency
+	} else if cerr == context.DeadlineExceeded {
+		code = http.StatusGatewayTimeout
 	}
-	fault := SOAPFault{Code: code, String: err.Error(), Detail: fmt.Sprintf("%+v", err)}
+	fault := SOAPFault{Code: strconv.Itoa(code), String: err.Error(), Detail: fmt.Sprintf("%+v", err)}
 	if f, ok := cerr.(interface {
 		FaultCode() string
 		FaultString() string
 	}); ok {
 		fault.Code, fault.String = f.FaultCode(), f.FaultString()
 	}
+	w.Header().Set("Content-Type", "text/xml")
+	w.WriteHeader(code)
+
 	io.WriteString(w, soapEnvelopeHeader+`<SOAP-ENV:Body>`)
 	err = xml.NewEncoder(w).Encode(fault)
 	io.WriteString(w, soapEnvelopeFooter)
