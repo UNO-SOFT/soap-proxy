@@ -144,13 +144,21 @@ type requestInfo struct {
 	EncodeHeader    func(context.Context, io.Writer) error
 }
 
+const (
+	soapEnvelopeHeader = xml.Header + `
+<SOAP-ENV:Envelope
+	xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
+	xmlns:xsi="http://www.w3.org/1999/XMLSchema-instance"
+	xmlns:xsd="http://www.w3.org/1999/XMLSchema"
+	SOAP-ENV:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
+`
+	soapEnvelopeFooter = `
+</SOAP-ENV:Body></SOAP-ENV:Envelope>`
+)
+
 func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter, recv grpcer.Receiver, request requestInfo, Log func(...interface{}) error) {
 	w.Header().Set("Content-Type", "text/xml")
-	io.WriteString(w, xml.Header)
-	io.WriteString(w, `<soap:Envelope
-	xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
-	soap:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
-`)
+	io.WriteString(w, soapEnvelopeHeader)
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
 	if request.EncodeHeader != nil {
@@ -158,13 +166,13 @@ func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter,
 		if err := request.EncodeHeader(ctx, buf); err != nil {
 			Log("EncodeHeader", err)
 		} else {
-			io.WriteString(w, "<soap:Header>\n")
+			io.WriteString(w, "<SOAP-ENV:Header>\n")
 			w.Write(buf.Bytes())
-			io.WriteString(w, "</soap:Header>\n")
+			io.WriteString(w, "</SOAP-ENV:Header>\n")
 		}
 	}
-	io.WriteString(w, "<soap:Body>\n")
-	defer func() { io.WriteString(w, "\n</soap:Body></soap:Envelope>") }()
+	io.WriteString(w, "<SOAP-ENV:Body>\n")
+	defer func() { io.WriteString(w, soapEnvelopeFooter) }()
 
 	part, err := recv.Recv()
 	if err != nil {
@@ -312,7 +320,7 @@ func (h *SOAPHandler) getWSDL() string {
 	buf.WriteString(h.WSDL[:i])
 	for _, loc := range h.Locations {
 		loc = strings.Trim(loc, `"`)
-		buf.WriteString(`<soap:address location="`)
+		buf.WriteString(`<SOAP-ENV:address location="`)
 		_ = xml.EscapeText(&buf, []byte(loc))
 		buf.WriteString("\" />\n")
 	}
@@ -437,33 +445,28 @@ func soapError(w http.ResponseWriter, err error) {
 		}
 	}
 
-	io.WriteString(w, xml.Header+`<soap:Envelope
-	xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
-	soap:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
-<soap:Body>`)
+	io.WriteString(w, soapEnvelopeHeader)
 	encodeSoapFault(w, err)
-	io.WriteString(w, `</soap:Body></soap:Envelope>`)
+	io.WriteString(w, soapEnvelopeFooter)
 }
 func encodeSoapFault(w io.Writer, err error) error {
-	var code string
+	code := "unknown"
+	cerr := errors.Cause(err)
 	if c, ok := errors.Cause(err).(interface {
 		Code() int
 	}); ok {
 		code = fmt.Sprintf("%d", c.Code())
 	}
-	io.WriteString(w, `
-<soap:Fault>
-<Code>`+code+`</Code><Reason>`)
-	buf := bufPool.Get().(*bytes.Buffer)
-	defer bufPool.Put(buf)
-	buf.Reset()
-	xml.EscapeText(buf, []byte(err.Error()))
-	w.Write(bytes.Replace(buf.Bytes(), []byte("&#xA;"), []byte{'\n'}, -1))
-	io.WriteString(w, `</Reason><Detail>`)
-	xml.EscapeText(w, []byte(fmt.Sprintf("%+v", err)))
-	_, err = io.WriteString(w, `</Detail>
-</soap:Fault>
-`)
+	fault := SOAPFault{Code: code, String: err.Error(), Detail: fmt.Sprintf("%+v", err)}
+	if f, ok := cerr.(interface {
+		FaultCode() string
+		FaultString() string
+	}); ok {
+		fault.Code, fault.String = f.FaultCode(), f.FaultString()
+	}
+	io.WriteString(w, soapEnvelopeHeader+`<SOAP-ENV:Body>`)
+	err = xml.NewEncoder(w).Encode(fault)
+	io.WriteString(w, soapEnvelopeFooter)
 	return err
 }
 
@@ -658,6 +661,15 @@ func newXMLDecoder(r io.Reader) *xml.Decoder {
 	dec := xml.NewDecoder(r)
 	dec.CharsetReader = charset.NewReaderLabel
 	return dec
+}
+
+// SOAPFault fault
+type SOAPFault struct {
+	XMLName xml.Name `xml:"SOAP-ENV:Fault"`
+	Code    string   `xml:"faultcode,omitempty"`
+	String  string   `xml:"faultstring,omitempty"`
+	Actor   string   `xml:"faultactor,omitempty"`
+	Detail  string   `xml:"detail>ExceptionDetail,omitempty"`
 }
 
 // vim: set fileencoding=utf-8 noet:
