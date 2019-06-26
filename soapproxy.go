@@ -320,7 +320,7 @@ func (h *SOAPHandler) getWSDL() string {
 	buf.WriteString(h.WSDL[:i])
 	for _, loc := range h.Locations {
 		loc = strings.Trim(loc, `"`)
-		buf.WriteString(`<SOAP-ENV:address location="`)
+		buf.WriteString(`<soap:address location="`)
 		_ = xml.EscapeText(&buf, []byte(loc))
 		buf.WriteString("\" />\n")
 	}
