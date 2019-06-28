@@ -77,10 +77,10 @@ const wsdlTmpl = xml.Header + `<definitions
   {{$input := mkTypeName .GetInputType}}
   {{$output := mkTypeName .GetOutputType}}
   <message name="{{$input}}">
-    <part element="types:{{$input}}" name="{{$input}}" />
+    <part element="types:{{$input}}" name="{{$input}}_Part" />
   </message>
   <message name="{{$output}}">
-    <part element="types:{{$output}}" name="{{$output}}" />
+    <part element="types:{{$output}}" name="{{$output}}_Part" />
   </message>
   {{end}}
   <portType name="{{.Package}}">
