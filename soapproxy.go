@@ -445,9 +445,7 @@ func soapError(w http.ResponseWriter, err error) {
 		}
 	}
 
-	io.WriteString(w, soapEnvelopeHeader)
 	encodeSoapFault(w, err)
-	io.WriteString(w, soapEnvelopeFooter)
 }
 func encodeSoapFault(w http.ResponseWriter, err error) error {
 	code := http.StatusInternalServerError
