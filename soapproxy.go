@@ -110,7 +110,7 @@ func (h *SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	buf.Reset()
 	jenc := json.NewEncoder(buf)
 	_ = jenc.Encode(inp)
-	Log("msg", "Calling", "soapAction", request.SOAPAction, "inp", buf.String())
+	Log("msg", "Calling", "soapAction", request.Action, "inp", buf.String())
 
 	var opts []grpc.CallOption
 	if u, p, ok := r.BasicAuth(); ok {
@@ -127,9 +127,9 @@ func (h *SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			defer cancel()
 		}
 	}
-	recv, err := h.Call(request.SOAPAction, ctx, inp, opts...)
+	recv, err := h.Call(request.Action, ctx, inp, opts...)
 	if err != nil {
-		Log("call", request.SOAPAction, "inp", fmt.Sprintf("%+v", inp), "error", err)
+		Log("call", request.Action, "inp", fmt.Sprintf("%+v", inp), "error", err)
 		soapError(w, err)
 		return
 	}
@@ -139,9 +139,9 @@ func (h *SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 type requestInfo struct {
 	Annotation
-	SOAPAction      string
-	Prefix, Postfix string
-	EncodeHeader    func(context.Context, io.Writer) error
+	Action, SOAPAction string
+	Prefix, Postfix    string
+	EncodeHeader       func(context.Context, io.Writer) error
 }
 
 const (
@@ -188,17 +188,23 @@ func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter,
 	for {
 		buf.Reset()
 		_ = jenc.Encode(part)
-		Log("recv", buf.String(), "type", typName, "soapAction", request.SOAPAction)
+		Log("recv", buf.String(), "type", typName, "soapAction", request.Action)
 		buf.Reset()
 		if request.Raw {
-			fmt.Fprintf(mw, "<%s%s_Output%s>", request.Prefix, request.SOAPAction, request.Postfix)
+			fmt.Fprintf(mw, "<%s%s_Output%s>", request.Prefix, request.Action, request.Postfix)
 			io.WriteString(mw, reflect.ValueOf(part).Elem().Field(0).String())
-			fmt.Fprintf(mw, "</%s%s_Output>", request.Prefix, request.SOAPAction)
+			fmt.Fprintf(mw, "</%s%s_Output>", request.Prefix, request.Action)
 		} else if h.EncodeOutput != nil {
 			err = h.EncodeOutput(enc, part)
 		} else if strings.HasSuffix(typName, "_Output") {
+			space := request.SOAPAction
+			if i := strings.LastIndex(space, ".proto/"); i >= 0 {
+				if j := strings.Index(space[i+7:], "/"); j >= 0 {
+					space = space[:i+7+j] + "_types"
+				}
+			}
 			err = enc.EncodeElement(part,
-				xml.StartElement{Name: xml.Name{Local: request.SOAPAction + "_Output"}},
+				xml.StartElement{Name: xml.Name{Local: request.Action + "_Output", Space: space}},
 			)
 		} else {
 			err = enc.Encode(part)
@@ -248,14 +254,15 @@ func (h *SOAPHandler) decodeRequest(ctx context.Context, r *http.Request) (reque
 		}
 	}
 
-	if i := strings.LastIndex(request.SOAPAction, ".proto/"); i >= 0 {
-		request.SOAPAction = request.SOAPAction[i+7:]
+	request.Action = request.SOAPAction
+	if i := strings.LastIndex(request.Action, ".proto/"); i >= 0 {
+		request.Action = request.Action[i+7:]
 	}
-	if i := strings.IndexByte(request.SOAPAction, '/'); i >= 0 {
-		request.SOAPAction = request.SOAPAction[i+1:]
+	if i := strings.IndexByte(request.Action, '/'); i >= 0 {
+		request.Action = request.Action[i+1:]
 	}
-	request.Annotation = h.annotation(request.SOAPAction)
-	h.Log("soapAction", request.SOAPAction, "justRawXML", request.Raw)
+	request.Annotation = h.annotation(request.Action)
+	h.Log("soapAction", request.Action, "justRawXML", request.Raw)
 	if request.Raw {
 		startPos := dec.InputOffset()
 		if err = dec.Skip(); err != nil {
@@ -268,7 +275,7 @@ func (h *SOAPHandler) decodeRequest(ctx context.Context, r *http.Request) (reque
 		rawXML = request.TrimInput(rawXML)
 		h.Log("prefix", request.Prefix, "postfix", request.Postfix)
 
-		inp := h.Input(request.SOAPAction)
+		inp := h.Input(request.Action)
 		h.Log("rawXML", rawXML, "inp", inp, "T", fmt.Sprintf("%T", inp))
 		reflect.ValueOf(inp).Elem().Field(0).SetString(rawXML)
 		return request, inp, nil
@@ -277,24 +284,24 @@ func (h *SOAPHandler) decodeRequest(ctx context.Context, r *http.Request) (reque
 		return request, nil, errors.WithMessage(err, buf.String())
 	}
 
-	if request.SOAPAction == "" {
-		request.SOAPAction = st.Name.Local
+	if request.Action == "" {
+		request.Action = st.Name.Local
 	}
 	var inp interface{}
 	if h.DecodeInput != nil {
-		inp, err := h.DecodeInput(&request.SOAPAction, dec, &st)
+		inp, err := h.DecodeInput(&request.Action, dec, &st)
 		return request, inp, errors.WithMessage(err, buf.String())
 	}
 
-	inp = h.Input(request.SOAPAction)
+	inp = h.Input(request.Action)
 	if inp == nil {
-		if i := strings.LastIndexByte(request.SOAPAction, '/'); i >= 0 {
-			if inp = h.Input(request.SOAPAction[i+1:]); inp != nil {
-				request.SOAPAction = request.SOAPAction[i+1:]
+		if i := strings.LastIndexByte(request.Action, '/'); i >= 0 {
+			if inp = h.Input(request.Action[i+1:]); inp != nil {
+				request.Action = request.Action[i+1:]
 			}
 		}
 		if inp == nil {
-			return request, nil, errors.Wrapf(errNotFound, "no input for %q", request.SOAPAction)
+			return request, nil, errors.Wrapf(errNotFound, "no input for %q", request.Action)
 		}
 	}
 
