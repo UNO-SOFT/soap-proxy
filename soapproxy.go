@@ -200,7 +200,7 @@ func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter,
 			space := request.SOAPAction
 			if i := strings.LastIndex(space, ".proto/"); i >= 0 {
 				if j := strings.Index(space[i+7:], "/"); j >= 0 {
-					space = space[:i+7+j] + "_types"
+					space = space[:i+7+j] + "_types/"
 				}
 			}
 			err = enc.EncodeElement(part,
