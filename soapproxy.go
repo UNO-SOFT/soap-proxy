@@ -466,12 +466,29 @@ func encodeSoapFault(w http.ResponseWriter, err error) error {
 	} else if cerr == context.DeadlineExceeded {
 		code = http.StatusGatewayTimeout
 	}
-	fault := SOAPFault{Code: strconv.Itoa(code), String: err.Error(), Detail: fmt.Sprintf("%+v", err)}
+	// https://www.tutorialspoint.com/soap/soap_fault.html
+	fault := SOAPFault{String: err.Error(), Detail: fmt.Sprintf("%+v", err)}
 	if f, ok := cerr.(interface {
 		FaultCode() string
 		FaultString() string
 	}); ok {
 		fault.Code, fault.String = f.FaultCode(), f.FaultString()
+		var ok bool
+		if i := strings.LastIndexByte(fault.Code, ':'); i >= 0 {
+			switch fault.Code[i+1:] {
+			case "VersionMismatch", "MustUnderstand", "Client", "Server":
+				ok = true
+			}
+		}
+		if !ok {
+			fault.Code = ""
+		}
+	}
+	if fault.Code == "" {
+		fault.Code = "SOAP-ENV:Server"
+		if code < 500 {
+			fault.Code = "SOAP-ENV:Client"
+		}
 	}
 	w.Header().Set("Content-Type", "text/xml")
 	w.WriteHeader(code)
