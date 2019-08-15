@@ -9,5 +9,7 @@ require (
 	golang.org/x/net v0.0.0-20190514140710-3ec191127204
 	golang.org/x/sync v0.0.0-20190423024810-112230192c58
 	google.golang.org/genproto v0.0.0-20190122154452-ba6ebe99b011
-	google.golang.org/grpc v1.20.1
+	google.golang.org/grpc v1.23.0
 )
+
+go 1.13
