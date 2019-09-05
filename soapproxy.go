@@ -244,11 +244,10 @@ func (h *SOAPHandler) decodeRequest(ctx context.Context, r *http.Request) (reque
 		if err != nil {
 			h.Log("findSoapHeader", err)
 		} else {
-			if ctx, request.EncodeHeader, err = h.DecodeHeader(ctx, hDec, &hSt); err != nil {
+			if _, request.EncodeHeader, err = h.DecodeHeader(ctx, hDec, &hSt); err != nil {
 				h.Log("DecodeHeader", err, "header", buf.String())
 				return request, nil, errors.Errorf("decodeHeader: %w", err)
 			}
-			r = r.WithContext(ctx)
 		}
 	}
 
