@@ -246,7 +246,7 @@ func (h *SOAPHandler) decodeRequest(ctx context.Context, r *http.Request) (reque
 		} else {
 			if ctx, request.EncodeHeader, err = h.DecodeHeader(ctx, hDec, &hSt); err != nil {
 				h.Log("DecodeHeader", err, "header", buf.String())
-				return request, nil, err
+				return request, nil, errors.Errorf("decodeHeader: %w", err)
 			}
 			r = r.WithContext(ctx)
 		}
@@ -264,7 +264,7 @@ func (h *SOAPHandler) decodeRequest(ctx context.Context, r *http.Request) (reque
 	if request.Raw {
 		startPos := dec.InputOffset()
 		if err = dec.Skip(); err != nil {
-			return request, nil, err
+			return request, nil, errors.Errorf("skip: %w", err)
 		}
 		b := bytes.TrimSpace(buf.Bytes()[startPos:dec.InputOffset()])
 		b = b[:bytes.LastIndex(b, []byte("</"))]
@@ -278,8 +278,8 @@ func (h *SOAPHandler) decodeRequest(ctx context.Context, r *http.Request) (reque
 		reflect.ValueOf(inp).Elem().Field(0).SetString(rawXML)
 		return request, inp, nil
 	}
-	if st, err = nextStart(dec); err != nil {
-		return request, nil, errors.Errorf("%s: %w", buf.String(), err)
+	if st, err = nextStart(dec); err != nil && !errors.Is(err, io.EOF) {
+		return request, nil, errors.Errorf("nextStart: %s: %w", buf.String(), err)
 	}
 
 	if request.Action == "" {
@@ -307,6 +307,16 @@ func (h *SOAPHandler) decodeRequest(ctx context.Context, r *http.Request) (reque
 	}
 
 	if err = dec.DecodeElement(inp, &st); err != nil {
+		if errors.Is(err, io.EOF) {
+			if t := reflect.TypeOf(inp).Elem(); t.Kind() == reflect.Struct && t.NumField() == 0 {
+				return request, inp, nil
+			} else {
+				h.Log("inp", fmt.Sprintf("%T", inp))
+			}
+		} else {
+			h.Log("ERROR", err)
+		}
+
 		err = errors.Errorf("into %T: %v\n%s: %w", inp, err, buf.String(), errDecode)
 	}
 	return request, inp, err
