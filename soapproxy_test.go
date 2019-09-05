@@ -29,7 +29,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pkg/errors"
+	errors "golang.org/x/xerrors"
 
 	"github.com/UNO-SOFT/grpcer"
 	"google.golang.org/grpc"
@@ -71,7 +71,7 @@ soap:encodingStyle="http://www.w3.org/2003/05/soap-encoding">
 	}
 	var any anyXML
 	if err := dec.DecodeElement(&any, &st); err != nil {
-		t.Error(errors.Wrapf(errDecode, "into %T: %v\n%s", any, err, buf.String()))
+		t.Error(errors.Errorf("into %T: %v\n%s: %w", any, err, buf.String(), errDecode))
 	}
 	t.Logf("any=%#v", any)
 }
@@ -177,11 +177,14 @@ func TestDecodeRequest(t *testing.T) {
 				}
 			}
 			if err := dec.DecodeElement(&hdr, st); err != nil {
-				return nil, errors.Wrapf(err, "decode %v", st)
+				return nil, errors.Errorf("decode %v: %w", st, err)
 			}
 			return func(w io.Writer) error {
 				hdr.IMSSOAPHeader.ResponseDateTime.Time = time.Now()
-				return errors.Wrap(xml.NewEncoder(w).Encode(hdr.IMSSOAPHeader), "encode header")
+				if err := xml.NewEncoder(w).Encode(hdr.IMSSOAPHeader); err != nil {
+					return errors.Errorf("encode header: %w", err)
+				}
+				return nil
 			}, nil
 		},
 	}

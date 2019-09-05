@@ -34,8 +34,8 @@ import (
 	"sync"
 
 	"github.com/UNO-SOFT/grpcer"
-	"github.com/pkg/errors"
 	"golang.org/x/net/html/charset"
+	errors "golang.org/x/xerrors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -95,10 +95,9 @@ func (h *SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	request, inp, err := h.decodeRequest(ctx, r)
 	if err != nil {
 		Log("msg", "decode", "into", fmt.Sprintf("%T", inp), "error", err)
-		switch errors.Cause(err) {
-		case errDecode:
+		if errors.Is(err, errDecode) {
 			soapError(w, err)
-		default:
+		} else {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
 		return
@@ -236,7 +235,7 @@ func (h *SOAPHandler) decodeRequest(ctx context.Context, r *http.Request) (reque
 	dec := newXMLDecoder(io.TeeReader(r.Body, buf))
 	st, err := findSoapBody(dec)
 	if err != nil {
-		return requestInfo{}, nil, errors.WithMessage(err, "findSoapBody in "+buf.String())
+		return requestInfo{}, nil, errors.Errorf("findSoapBody in %s: %w", buf.String(), err)
 	}
 	request := requestInfo{SOAPAction: strings.Trim(r.Header.Get("SOAPAction"), `"`)}
 	if h.DecodeHeader != nil {
@@ -280,7 +279,7 @@ func (h *SOAPHandler) decodeRequest(ctx context.Context, r *http.Request) (reque
 		return request, inp, nil
 	}
 	if st, err = nextStart(dec); err != nil {
-		return request, nil, errors.WithMessage(err, buf.String())
+		return request, nil, errors.Errorf("%s: %w", buf.String(), err)
 	}
 
 	if request.Action == "" {
@@ -289,7 +288,10 @@ func (h *SOAPHandler) decodeRequest(ctx context.Context, r *http.Request) (reque
 	var inp interface{}
 	if h.DecodeInput != nil {
 		inp, err := h.DecodeInput(&request.Action, dec, &st)
-		return request, inp, errors.WithMessage(err, buf.String())
+		if err != nil {
+			return request, inp, errors.Errorf("%s: %w", buf.String(), err)
+		}
+		return request, inp, nil
 	}
 
 	inp = h.Input(request.Action)
@@ -300,12 +302,12 @@ func (h *SOAPHandler) decodeRequest(ctx context.Context, r *http.Request) (reque
 			}
 		}
 		if inp == nil {
-			return request, nil, errors.Wrapf(errNotFound, "no input for %q", request.Action)
+			return request, nil, errors.Errorf("no input for %q: %w", request.Action, errNotFound)
 		}
 	}
 
 	if err = dec.DecodeElement(inp, &st); err != nil {
-		err = errors.Wrapf(errDecode, "into %T: %v\n%s", inp, err, buf.String())
+		err = errors.Errorf("into %T: %v\n%s: %w", inp, err, buf.String(), errDecode)
 	}
 	return request, inp, err
 }
@@ -442,7 +444,7 @@ func mayFilterEmptyTags(r *http.Request, Log func(...interface{}) error) {
 
 func soapError(w http.ResponseWriter, err error) {
 	w.Header().Set("Content-Type", "text/xml")
-	switch st := status.Convert(errors.Cause(err)); st.Code() {
+	switch st := status.Convert(errors.Unwrap(err)); st.Code() {
 	case codes.PermissionDenied, codes.Unauthenticated:
 		w.WriteHeader(http.StatusUnauthorized)
 	case codes.Unknown:
@@ -455,22 +457,23 @@ func soapError(w http.ResponseWriter, err error) {
 }
 func encodeSoapFault(w http.ResponseWriter, err error) error {
 	code := http.StatusInternalServerError
-	cerr := errors.Cause(err)
-	if c, ok := errors.Cause(err).(interface {
+	var c interface {
 		Code() int
-	}); ok {
+	}
+	if errors.As(err, &c) {
 		code = c.Code()
-	} else if cerr == context.Canceled {
+	} else if errors.Is(err, context.Canceled) {
 		code = http.StatusFailedDependency
-	} else if cerr == context.DeadlineExceeded {
+	} else if errors.Is(err, context.DeadlineExceeded) {
 		code = http.StatusGatewayTimeout
 	}
 	// https://www.tutorialspoint.com/soap/soap_fault.html
 	fault := SOAPFault{String: err.Error(), Detail: fmt.Sprintf("%+v", err)}
-	if f, ok := cerr.(interface {
+	var f interface {
 		FaultCode() string
 		FaultString() string
-	}); ok {
+	}
+	if errors.As(err, &f) {
 		fault.Code, fault.String = f.FaultCode(), f.FaultString()
 		var ok bool
 		if i := strings.LastIndexByte(fault.Code, ':'); i >= 0 {
