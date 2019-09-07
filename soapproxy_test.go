@@ -32,6 +32,7 @@ import (
 	errors "golang.org/x/xerrors"
 
 	"github.com/UNO-SOFT/grpcer"
+	"github.com/tgulacsi/oracall/custom"
 	"google.golang.org/grpc"
 )
 
@@ -170,13 +171,12 @@ func TestDecodeRequest(t *testing.T) {
 					AuthToken                                                                string   `xml:"AuthToken"`
 					SystemID                                                                 string   `xml:"SystemId"`
 					ActualUserID                                                             string   `xml:"ActualUserId"`
-					RequestDateTime, ResponseDateTime                                        DateTime
+					RequestDateTime, ResponseDateTime                                        custom.DateTime
 					TechnicalUserId                                                          string `xml:"TechnicalUserID"`
 					ResponseCode, ResponseDescription, TargetServiceID, TargetServiceVersion string
 					TransactionID, ParentTransactionID                                       string
 				}
 			}
-			ctx := context.Background()
 			if err := dec.DecodeElement(&hdr, st); err != nil {
 				return ctx, nil, errors.Errorf("decode %v: %w", st, err)
 			}
@@ -195,14 +195,16 @@ func TestDecodeRequest(t *testing.T) {
 	}
 	req.Header.Set("Content-Type", "application/xml")
 	req.Header.Set("SOAPAction", "Login")
-	info, part, err := h.decodeRequest(req)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	info, part, err := h.decodeRequest(ctx, req)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Logf("part: %#v", part)
 	t.Logf("info: %#v", info)
 	var buf strings.Builder
-	if err := info.EncodeHeader(&buf); err != nil {
+	if err := info.EncodeHeader(ctx, &buf); err != nil {
 		t.Error(err)
 	}
 	t.Log("hdr:", buf.String())
