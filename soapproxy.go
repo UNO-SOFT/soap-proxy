@@ -52,7 +52,7 @@ type SOAPHandler struct {
 	Locations    []string
 	DecodeInput  func(*string, *xml.Decoder, *xml.StartElement) (interface{}, error)
 	EncodeOutput func(*xml.Encoder, interface{}) error
-	DecodeHeader func(context.Context, *xml.Decoder, *xml.StartElement) (context.Context, func(context.Context, io.Writer) error, error)
+	DecodeHeader func(context.Context, *xml.Decoder, *xml.StartElement) (context.Context, func(context.Context, io.Writer, error) error, error)
 
 	Timeout           time.Duration
 	wsdlWithLocations string
@@ -139,7 +139,7 @@ type requestInfo struct {
 	Annotation
 	Action, SOAPAction string
 	Prefix, Postfix    string
-	EncodeHeader       func(context.Context, io.Writer) error
+	EncodeHeader       func(context.Context, io.Writer, error) error
 }
 
 const (
@@ -157,12 +157,15 @@ const (
 func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter, recv grpcer.Receiver, request requestInfo, Log func(...interface{}) error) {
 	w.Header().Set("Content-Type", "text/xml")
 	io.WriteString(w, soapEnvelopeHeader)
+
+	part, recvErr := recv.Recv()
+
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
 	if request.EncodeHeader != nil {
 		buf.Reset()
-		if err := request.EncodeHeader(ctx, buf); err != nil {
-			Log("EncodeHeader", err)
+		if hdrErr := request.EncodeHeader(ctx, buf, recvErr); hdrErr != nil {
+			Log("EncodeHeader", hdrErr)
 		} else {
 			io.WriteString(w, "<SOAP-ENV:Header>\n")
 			w.Write(buf.Bytes())
@@ -172,10 +175,9 @@ func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter,
 	io.WriteString(w, "<SOAP-ENV:Body>\n")
 	defer func() { io.WriteString(w, soapEnvelopeFooter) }()
 
-	part, err := recv.Recv()
-	if err != nil {
-		Log("recv-error", err)
-		encodeSoapFault(w, err)
+	if recvErr != nil {
+		Log("recv-error", recvErr)
+		encodeSoapFault(w, recvErr)
 		return
 	}
 	typName := strings.TrimPrefix(fmt.Sprintf("%T", part), "*")
@@ -188,6 +190,7 @@ func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter,
 		_ = jenc.Encode(part)
 		Log("recv", buf.String(), "type", typName, "soapAction", request.Action)
 		buf.Reset()
+		var err error
 		if request.Raw {
 			fmt.Fprintf(mw, "<%s%s_Output%s>", request.Prefix, request.Action, request.Postfix)
 			io.WriteString(mw, reflect.ValueOf(part).Elem().Field(0).String())
