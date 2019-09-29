@@ -164,7 +164,7 @@ func TestDecodeRequest(t *testing.T) {
 			return nil
 		},
 
-		DecodeHeader: func(ctx context.Context, dec *xml.Decoder, st *xml.StartElement) (context.Context, func(context.Context, io.Writer) error, error) {
+		DecodeHeader: func(ctx context.Context, dec *xml.Decoder, st *xml.StartElement) (context.Context, func(context.Context, io.Writer, error) error, error) {
 			var hdr struct {
 				IMSSOAPHeader struct {
 					XMLName                                                                  xml.Name `xml:"IMSSOAPHeader"`
@@ -180,7 +180,7 @@ func TestDecodeRequest(t *testing.T) {
 			if err := dec.DecodeElement(&hdr, st); err != nil {
 				return ctx, nil, errors.Errorf("decode %v: %w", st, err)
 			}
-			return ctx, func(ctx context.Context, w io.Writer) error {
+			return ctx, func(ctx context.Context, w io.Writer, _ error) error {
 				hdr.IMSSOAPHeader.ResponseDateTime.Time = time.Now()
 				if err := xml.NewEncoder(w).Encode(hdr.IMSSOAPHeader); err != nil {
 					return errors.Errorf("encode header: %w", err)
@@ -204,7 +204,7 @@ func TestDecodeRequest(t *testing.T) {
 	t.Logf("part: %#v", part)
 	t.Logf("info: %#v", info)
 	var buf strings.Builder
-	if err := info.EncodeHeader(ctx, &buf); err != nil {
+	if err := info.EncodeHeader(ctx, &buf, nil); err != nil {
 		t.Error(err)
 	}
 	t.Log("hdr:", buf.String())
