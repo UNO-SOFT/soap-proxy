@@ -456,7 +456,7 @@ func mkXSDElement(f *descriptor.FieldDescriptorProto) string {
 	maxOccurs := 1
 	if f.GetLabel() == descriptor.FieldDescriptorProto_LABEL_REPEATED {
 		if wrapArray && !strings.HasSuffix(f.GetName(), "_Rec") && strings.HasPrefix(typ, "types:") { // complex type
-			log.Println(f.GetName(), f)
+			//log.Println(f.GetName(), f)
 			return fmt.Sprintf(`<xs:element minOccurs="0" nillable="true" maxOccurs="1" name="%s" type="%s_Arr"/>`,
 				name, typ)
 		}
