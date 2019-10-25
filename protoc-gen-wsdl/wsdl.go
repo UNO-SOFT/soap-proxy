@@ -274,7 +274,8 @@ var elementTypeTemplate = template.Must(
 		Parse(`<xs:element name="{{.Name}}">
   <xs:complexType>
     <xs:sequence>
-	{{with $parent := .}}{{range .Fields}}{{mkXSDElement . $parent}}{{end}}{{end}}
+	{{range .Fields}}{{mkXSDElement .}}
+	{{end}}
     </xs:sequence>
   </xs:complexType>
 </xs:element>
@@ -287,7 +288,8 @@ var xsdTypeTemplate = template.Must(
 		}).
 		Parse(`<xs:complexType name="{{.Name}}">
   <xs:sequence>
-  {{with $parent := .}}{{range .Fields}}{{mkXSDElement .}}{{end}}{{end}}
+  {{range .Fields}}{{mkXSDElement .}}
+  {{end}}
   </xs:sequence>
 </xs:complexType>
 `))
@@ -433,10 +435,9 @@ func filterHiddenFields(fields []*descriptor.FieldDescriptorProto) []*descriptor
 	return fields
 }
 
-func mkXSDElement(f, parent *descriptor.FieldDescriptorProto) string {
+func mkXSDElement(f *descriptor.FieldDescriptorProto) string {
 	maxOccurs := 1
-	if parent != nil && parent.GetLabel() == descriptor.FieldDescriptorProto_LABEL_REPEATED ||
-		parent == nil && f.GetLabel() == descriptor.FieldDescriptorProto_LABEL_REPEATED {
+	if f.GetLabel() == descriptor.FieldDescriptorProto_LABEL_REPEATED {
 		maxOccurs = 999
 	}
 	name := CamelCase(f.GetName())
