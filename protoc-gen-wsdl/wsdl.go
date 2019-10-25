@@ -20,6 +20,7 @@ import (
 	"compress/gzip"
 	"encoding/base64"
 	"encoding/xml"
+	"os"
 	"fmt"
 	"io"
 	"log"
@@ -36,6 +37,7 @@ import (
 )
 
 var IsHidden = func(s string) bool { return strings.HasSuffix(s, "_hidden") }
+var wrapArray = os.Getenv("WRAP_ARRAY") == "1"
 
 const wsdlTmpl = xml.Header + `<definitions
     name="{{.Package}}"
@@ -374,14 +376,19 @@ func (t *typer) mkType(fullName string, m *descriptor.DescriptorProto, documenta
 	addFieldSubtypes = func(mFields []*descriptor.FieldDescriptorProto) {
 		for _, f := range mFields {
 			tn := mkTypeName(f.GetTypeName())
-			if tn == "" {
+			if tn == "" || len(subTypes[tn]) != 0 {
 				continue
 			}
-			if len(subTypes[tn]) == 0 {
-				ft := t.Types[f.GetTypeName()].GetField()
-				subTypes[tn] = ft
-				addFieldSubtypes(ft)
+			if wrapArray && f.GetLabel() == descriptor.FieldDescriptorProto_LABEL_REPEATED {
+				arr := *f
+				nm := f.GetName() + "_Rec"
+				arr.Name = &nm
+
+				subTypes[tn+"_Arr"] = []*descriptor.FieldDescriptorProto{&arr}
 			}
+			ft := t.Types[f.GetTypeName()].GetField()
+			subTypes[tn] = ft
+			addFieldSubtypes(ft)
 		}
 	}
 	addFieldSubtypes(mFields)
@@ -436,10 +443,6 @@ func filterHiddenFields(fields []*descriptor.FieldDescriptorProto) []*descriptor
 }
 
 func mkXSDElement(f *descriptor.FieldDescriptorProto) string {
-	maxOccurs := 1
-	if f.GetLabel() == descriptor.FieldDescriptorProto_LABEL_REPEATED {
-		maxOccurs = 999
-	}
 	name := CamelCase(f.GetName())
 	typ := mkTypeName(f.GetTypeName())
 	if typ == "" {
@@ -449,6 +452,15 @@ func mkXSDElement(f *descriptor.FieldDescriptorProto) string {
 		}
 	} else {
 		typ = "types:" + typ
+	}
+	maxOccurs := 1
+	if f.GetLabel() == descriptor.FieldDescriptorProto_LABEL_REPEATED {
+		if wrapArray && !strings.HasSuffix(f.GetName(), "_Rec") && strings.HasPrefix(typ, "types:") { // complex type
+			log.Println(f.GetName(), f)
+			return fmt.Sprintf(`<xs:element minOccurs="0" nillable="true" maxOccurs="1" name="%s" type="%s_Arr"/>`,
+				name, typ)
+		}
+		maxOccurs = 999
 	}
 	return fmt.Sprintf(
 		`<xs:element minOccurs="0" nillable="true" maxOccurs="%d" name="%s" type="%s"/>`,
