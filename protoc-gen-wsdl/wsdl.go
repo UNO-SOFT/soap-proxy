@@ -18,12 +18,14 @@ package main
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/base64"
 	"encoding/xml"
 	"fmt"
 	"io"
 	"log"
 	"os"
+	"os/exec"
 	"path"
 	"regexp"
 	"strconv"
@@ -259,12 +261,29 @@ func Generate(resp *protoc.CodeGeneratorResponse, req protoc.CodeGeneratorReques
 				destFn := strings.TrimSuffix(path.Base(pkg), ".proto") + ".wsdl"
 				buf := bufPool.Get().(*bytes.Buffer)
 				buf.Reset()
+				buf2 := bufPool.Get().(*bytes.Buffer)
+				buf2.Reset()
 				defer func() {
 					buf.Reset()
 					bufPool.Put(buf)
+					buf2.Reset()
+					bufPool.Put(buf2)
 				}()
 				err := wsdlTemplate.Execute(buf, data)
 				content := buf.String()
+				if err == nil {
+					ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+					cmd := exec.CommandContext(ctx, "xmllint", "--format", "-")
+					cmd.Stdin = bytes.NewReader(buf.Bytes())
+					cmd.Stdout, cmd.Stderr = buf2, os.Stderr
+					fmtErr := cmd.Run()
+					cancel()
+					if fmtErr != nil {
+						log.Println(cmd.Args, fmtErr)
+					} else {
+						content = buf2.String()
+					}
+				}
 				mu.Lock()
 				if err != nil {
 					errS := err.Error()
