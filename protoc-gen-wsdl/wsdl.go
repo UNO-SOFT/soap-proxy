@@ -1,4 +1,4 @@
-// Copyright 2017 Tamás Gulácsi
+// Copyright 2017, 2020 Tamás Gulácsi
 //
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
@@ -446,7 +446,7 @@ func (t *typer) mkType(fullName string, m *descriptor.DescriptorProto, documenta
 		Fields []Field
 	}
 	newFields := func(name string, fields []*descriptor.FieldDescriptorProto) Fields {
-		ff := filterHiddenFields(m.GetField())
+		ff := filterHiddenFields(fields)
 		fs := Fields{Name: name, Fields: make([]Field, len(ff))}
 		for i, f := range ff {
 			fld := Field{FieldDescriptorProto: f, Documentation: documentation[fullName+"."+f.GetName()]}
@@ -466,10 +466,12 @@ func (t *typer) mkType(fullName string, m *descriptor.DescriptorProto, documenta
 	if err := elementTypeTemplate.Execute(buf, newFields(typName, m.GetField())); err != nil {
 		panic(err)
 	}
+	if len(subTypes) == 0 {
+		return buf.String()
+	}
 	if t.seen == nil {
 		t.seen = make(map[string]struct{})
 	}
-	//log.Println(fullName, "subTypes:", subTypes)
 	for k, vv := range subTypes {
 		if _, seen := t.seen[k]; seen {
 			continue
