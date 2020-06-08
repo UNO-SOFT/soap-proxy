@@ -4,8 +4,10 @@ require (
 	aqwari.net/xml v0.0.0-20181013063537-841f47b2a098
 	github.com/UNO-SOFT/grpcer v0.4.5
 	github.com/golang/protobuf v1.3.3
+	github.com/hashicorp/go-hclog v0.14.1 // indirect
+	github.com/hashicorp/go-retryablehttp v0.6.6
 	github.com/hhrutter/pdfcpu v0.2.1 // indirect
-	github.com/tgulacsi/go v0.6.2 // indirect
+	github.com/tgulacsi/go v0.12.2
 	github.com/tgulacsi/oracall v0.11.5
 	golang.org/x/net v0.0.0-20200202094626-16171245cfb2
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
