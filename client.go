@@ -19,6 +19,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/xml"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"strconv"
@@ -31,10 +32,11 @@ import (
 	"github.com/tgulacsi/go/httpclient"
 )
 
-var (DefaultCallTimeout = time.Minute
+var (
+	DefaultCallTimeout = time.Minute
 
-clientsMu sync.RWMutex
-clients = make(map[string]*retryablehttp.Client)
+	clientsMu sync.RWMutex
+	clients   = make(map[string]*retryablehttp.Client)
 )
 
 const (
@@ -43,9 +45,9 @@ const (
 )
 
 // SOAPCall destURL with SOAPAction=action, decoding the response body into resp.
-func SOAPCall(ctx context.Context, destURL, action string, reqBody string , resp interface{}, Log func(...interface{}) error) error {
+func SOAPCall(ctx context.Context, destURL, action string, reqBody string, resp interface{}, Log func(...interface{}) error) error {
 	buf := bufPool.Get().(*bytes.Buffer)
-	defer func(){
+	defer func() {
 		buf.Reset()
 		bufPool.Put(buf)
 	}()
@@ -100,12 +102,29 @@ func SOAPCall(ctx context.Context, destURL, action string, reqBody string , resp
 		return err
 	}
 	err = dec.DecodeElement(resp, &st)
-	if Log != nil {
-		if err != nil {
-			io.Copy(ioutil.Discard, tr)
-		}
-		Log("response", buf.String(), "decoded", resp, "error", err)
+	if Log == nil {
+		return err
 	}
-	return err
+	if err != nil {
+		io.Copy(ioutil.Discard, tr)
+		Log("msg", "response", buf.String(), "decoded", resp, "error", err)
+		return err
+	}
+	respLen := buf.Len()
+	respHead, respTail := splitHeadTail(buf.Bytes(), 512)
+	buf.Reset()
+	fmt.Fprintf(buf, "%#v", resp)
+	decHead, decTail := splitHeadTail(buf.Bytes(), 512)
+	Log("msg", "response", "resp-length", respLen,
+		"resp-head", respHead, "resp-tail", respTail,
+		"decoded-length", buf.Len(), "decoded-head", decHead, "decoded-tail", decTail)
+	return nil
 }
 
+func splitHeadTail(b []byte, length int) (head string, tail string) {
+	if n := len(b) / 2; n <= length {
+		s := string(b)
+		return s[:n], s[n:]
+	}
+	return string(b[:length]), string(b[len(b)-length:])
+}
