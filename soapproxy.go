@@ -29,6 +29,7 @@ import (
 	"net/http"
 	"reflect"
 	"time"
+
 	//"regexp"
 	"strings"
 	"sync"
@@ -42,6 +43,8 @@ import (
 )
 
 var DefaultTimeout = 5 * time.Minute
+
+const textXML = "text/xml; charset=utf-8"
 
 // SOAPHandler is a http.Handler which proxies SOAP requests to the Client.
 // WSDL is served on GET requests.
@@ -86,7 +89,7 @@ func (h *SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Log = logger.Log
 	}
 	if r.Method == "GET" {
-		w.Header().Set("Content-Type", "text/xml")
+		w.Header().Set("Content-Type", textXML)
 		io.WriteString(w, h.getWSDL())
 		return
 	}
@@ -155,7 +158,7 @@ const (
 )
 
 func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter, recv grpcer.Receiver, request requestInfo, Log func(...interface{}) error) {
-	w.Header().Set("Content-Type", "text/xml")
+	w.Header().Set("Content-Type", textXML)
 	io.WriteString(w, soapEnvelopeHeader)
 
 	part, recvErr := recv.Recv()
@@ -455,7 +458,7 @@ func mayFilterEmptyTags(r *http.Request, Log func(...interface{}) error) {
 }
 
 func soapError(w http.ResponseWriter, err error) {
-	w.Header().Set("Content-Type", "text/xml")
+	w.Header().Set("Content-Type", textXML)
 	switch st := status.Convert(errors.Unwrap(err)); st.Code() {
 	case codes.PermissionDenied, codes.Unauthenticated:
 		w.WriteHeader(http.StatusUnauthorized)
@@ -504,7 +507,7 @@ func encodeSoapFault(w http.ResponseWriter, err error) error {
 			fault.Code = "SOAP-ENV:Client"
 		}
 	}
-	w.Header().Set("Content-Type", "text/xml")
+	w.Header().Set("Content-Type", textXML)
 	w.WriteHeader(code)
 
 	io.WriteString(w, soapEnvelopeHeader+`<SOAP-ENV:Body>`)
