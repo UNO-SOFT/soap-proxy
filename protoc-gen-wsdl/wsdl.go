@@ -1,4 +1,4 @@
-// Copyright 2017 Tamás Gulácsi
+// Copyright 2017, 2020 Tamás Gulácsi
 //
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,13 +18,17 @@ package main
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/base64"
 	"encoding/xml"
-	"os"
 	"fmt"
 	"io"
 	"log"
+	"os"
+	"os/exec"
 	"path"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"text/template"
@@ -66,6 +70,14 @@ const wsdlTmpl = xml.Header + `<definitions
           </xs:sequence>
         </xs:complexType>
       </xs:element>
+      {{range .RestrictedTypes}}
+	  {{if ne .Name ""}}
+	  <xs:simpleType name="{{.Name}}"><xs:restriction base="xs:
+	  {{- if eq (slice .Name 0 3) "str"}}string"><xs:maxLength value="{{if eq .Prec 0}}32767{{else}}{{.Prec}}{{end}}"/>
+	  {{- else}}decimal"><xs:totalDigits value="{{if eq .Prec 0}}38{{else}}{{.Prec}}{{end}}"/>{{if ne .Scale 0}}<xs:fractionDigits value="{{.Scale}}"/>{{end}}
+	  {{end}}</xs:restriction></xs:simpleType>
+	  {{end}}{{end}}
+
 	  {{$docu := .Documentation}}
       {{range $k, $m := .Types}}
         {{mkType $k $m $docu}}
@@ -126,10 +138,30 @@ func Generate(resp *protoc.CodeGeneratorResponse, req protoc.CodeGeneratorReques
 	roots := make(map[string]*descriptor.FileDescriptorProto, len(rootNames))
 	allTypes := make(map[string]*descriptor.DescriptorProto, 1024)
 	var found int
+	fieldDocs := make(map[string]string)
+	restrictedTypes := make(map[string]XSDType)
 	for i := len(files) - 1; i >= 0; i-- {
 		f := files[i]
-		for _, m := range f.GetMessageType() {
-			allTypes["."+f.GetPackage()+"."+m.GetName()] = m
+		msgs, pkg := f.GetMessageType(), f.GetPackage()
+		for _, m := range msgs {
+			allTypes["."+pkg+"."+m.GetName()] = m
+		}
+		if si := f.GetSourceCodeInfo(); si != nil {
+			for _, loc := range si.GetLocation() {
+				if path := loc.GetPath(); len(path) >= 4 && path[0] == 4 && path[2] == 2 {
+					if s := strings.TrimSpace(loc.GetLeadingComments()); s != "" {
+						m := msgs[int(path[1])]
+						fieldDocs["."+pkg+"."+m.GetName()+"."+m.GetField()[int(path[3])].GetName()] = s
+						if _, ok := restrictedTypes[s]; !ok {
+							if xt := xsdTypeFromDocu(s); xt.Name != "" {
+								if _, ok := restrictedTypes[xt.Name]; !ok {
+									restrictedTypes[xt.Name] = xt
+								}
+							}
+						}
+					}
+				}
+			}
 		}
 		if found == len(rootNames) {
 			continue
@@ -161,13 +193,7 @@ func Generate(resp *protoc.CodeGeneratorResponse, req protoc.CodeGeneratorReques
 		Funcs(template.FuncMap{
 			"mkTypeName": mkTypeName,
 			"mkType":     (&typer{Types: allTypes}).mkType,
-			"xmlEscape": func(s string) string {
-				var buf bytes.Buffer
-				if err := xml.EscapeText(&buf, []byte(s)); err != nil {
-					panic(err)
-				}
-				return buf.String()
-			},
+			"xmlEscape":  xmlEscape,
 		}).
 		Parse(wsdlTmpl))
 
@@ -182,6 +208,7 @@ func Generate(resp *protoc.CodeGeneratorResponse, req protoc.CodeGeneratorReques
 		Version, Owner    string
 		Locations         []string
 		Documentation     map[string]string
+		RestrictedTypes   map[string]XSDType
 	}
 
 	now := time.Now()
@@ -203,6 +230,10 @@ func Generate(resp *protoc.CodeGeneratorResponse, req protoc.CodeGeneratorReques
 					ServiceDescriptorProto: svc,
 					GeneratedAt:            now,
 					Documentation:          make(map[string]string),
+					RestrictedTypes:        restrictedTypes,
+				}
+				for k, v := range fieldDocs {
+					data.Documentation[k] = v
 				}
 				if si := root.GetSourceCodeInfo(); si != nil {
 					for _, loc := range si.GetLocation() {
@@ -230,12 +261,29 @@ func Generate(resp *protoc.CodeGeneratorResponse, req protoc.CodeGeneratorReques
 				destFn := strings.TrimSuffix(path.Base(pkg), ".proto") + ".wsdl"
 				buf := bufPool.Get().(*bytes.Buffer)
 				buf.Reset()
+				buf2 := bufPool.Get().(*bytes.Buffer)
+				buf2.Reset()
 				defer func() {
 					buf.Reset()
 					bufPool.Put(buf)
+					buf2.Reset()
+					bufPool.Put(buf2)
 				}()
 				err := wsdlTemplate.Execute(buf, data)
 				content := buf.String()
+				if err == nil {
+					ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+					cmd := exec.CommandContext(ctx, "xmllint", "--format", "-")
+					cmd.Stdin = bytes.NewReader(buf.Bytes())
+					cmd.Stdout, cmd.Stderr = buf2, os.Stderr
+					fmtErr := cmd.Run()
+					cancel()
+					if fmtErr != nil {
+						log.Println(cmd.Args, fmtErr)
+					} else {
+						content = buf2.String()
+					}
+				}
 				mu.Lock()
 				if err != nil {
 					errS := err.Error()
@@ -269,7 +317,7 @@ const WSDLgzb64 = ` + "`" + gzb64(content) + "`\n"
 var bufPool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]byte, 0, 4096)) }}
 
 var elementTypeTemplate = template.Must(
-	template.New("type").
+	template.New("elementType").
 		Funcs(template.FuncMap{
 			"mkXSDElement": mkXSDElement,
 		}).
@@ -284,7 +332,7 @@ var elementTypeTemplate = template.Must(
 `))
 
 var xsdTypeTemplate = template.Must(
-	template.New("type").
+	template.New("xsdType").
 		Funcs(template.FuncMap{
 			"mkXSDElement": mkXSDElement,
 		}).
@@ -395,33 +443,50 @@ func (t *typer) mkType(fullName string, m *descriptor.DescriptorProto, documenta
 
 	type Fields struct {
 		Name   string
-		Fields []*descriptor.FieldDescriptorProto
+		Fields []Field
+	}
+	newFields := func(name string, fields []*descriptor.FieldDescriptorProto) Fields {
+		ff := filterHiddenFields(fields)
+		fs := Fields{Name: name, Fields: make([]Field, len(ff))}
+		for i, f := range ff {
+			fld := Field{FieldDescriptorProto: f, Documentation: documentation[fullName+"."+f.GetName()]}
+			if xt := xsdTypeFromDocu(fld.Documentation); xt.Name != "" {
+				fld.XSDTypeName = xt.Name
+			}
+			fs.Fields[i] = fld
+		}
+		return fs
 	}
 	if fullName == "" {
 		fullName = m.GetName()
 	}
 	typName := mkTypeName(fullName)
 	//log.Println("full:", fullName, "typ:", typName, "len:", len(m.GetField()), "filtered:", len(filterHiddenFields(m.GetField())))
-	fields := Fields{Name: typName, Fields: filterHiddenFields(m.GetField())}
-	if err := elementTypeTemplate.Execute(buf, fields); err != nil {
+
+	if err := elementTypeTemplate.Execute(buf, newFields(typName, m.GetField())); err != nil {
 		panic(err)
+	}
+	if len(subTypes) == 0 {
+		return buf.String()
 	}
 	if t.seen == nil {
 		t.seen = make(map[string]struct{})
 	}
-	//log.Println(fullName, "subTypes:", subTypes)
 	for k, vv := range subTypes {
 		if _, seen := t.seen[k]; seen {
 			continue
 		}
 		t.seen[k] = struct{}{}
-		if err := xsdTypeTemplate.Execute(buf,
-			Fields{Name: k, Fields: filterHiddenFields(vv)},
-		); err != nil {
+		if err := xsdTypeTemplate.Execute(buf, newFields(k, vv)); err != nil {
 			panic(err)
 		}
 	}
 	return buf.String()
+}
+
+type Field struct {
+	*descriptor.FieldDescriptorProto
+	XSDTypeName, Documentation string
 }
 
 func filterHiddenFields(fields []*descriptor.FieldDescriptorProto) []*descriptor.FieldDescriptorProto {
@@ -442,30 +507,126 @@ func filterHiddenFields(fields []*descriptor.FieldDescriptorProto) []*descriptor
 	return fields
 }
 
-func mkXSDElement(f *descriptor.FieldDescriptorProto) string {
+func mkXSDElement(f Field) string {
 	name := CamelCase(f.GetName())
-	typ := mkTypeName(f.GetTypeName())
+	typ := f.XSDTypeName
+	var cplx bool
 	if typ == "" {
+		typ = mkTypeName(f.GetTypeName())
+		cplx = typ != ""
+	}
+	if typ != "" {
+		typ = "types:" + typ
+	} else {
 		typ = xsdType(f.GetType(), f.GetTypeName())
 		if typ == "" {
 			log.Printf("no type name for %s (%s)", f.GetTypeName(), f)
 		}
-	} else {
-		typ = "types:" + typ
 	}
 	maxOccurs := 1
 	if f.GetLabel() == descriptor.FieldDescriptorProto_LABEL_REPEATED {
-		if wrapArray && !strings.HasSuffix(f.GetName(), "_Rec") && strings.HasPrefix(typ, "types:") { // complex type
+		if wrapArray && !strings.HasSuffix(f.GetName(), "_Rec") && cplx { // complex type
 			//log.Println(f.GetName(), f)
 			return fmt.Sprintf(`<xs:element minOccurs="0" nillable="true" maxOccurs="1" name="%s" type="%s_Arr"/>`,
 				name, typ)
 		}
 		maxOccurs = 999
 	}
+	docu := f.Documentation
+	if docu != "" {
+		docu = "<!-- " + docu + " -->\n"
+	}
 	return fmt.Sprintf(
-		`<xs:element minOccurs="0" nillable="true" maxOccurs="%d" name="%s" type="%s"/>`,
-		maxOccurs, name, typ,
+		`%s<xs:element minOccurs="0" nillable="true" maxOccurs="%d" name="%s" type="%s"/>`,
+		docu, maxOccurs, name, typ,
 	)
+}
+
+var rOraType = regexp.MustCompile("(?:^|\\s*)(DATE|(?:INTEGER|NUMBER)(?:[(][0-9]+[)])?|VARCHAR2[(][0-9]+[)]|NUMBER[(][0-9]+,[0-9]+[)])$")
+
+type XSDType struct {
+	Name          string
+	Documentation string
+	Prec, Scale   int
+}
+
+func (xt XSDType) Element() string {
+	if xt.Name == "" {
+		return ""
+	}
+	switch xt.Name[:3] {
+	case "str":
+		if xt.Prec > 0 {
+			return fmt.Sprintf(`<xs:element name="`+xt.Name+`"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="%d"/></xs:restriction></xs:simpleType></xs:element>`, xt.Prec)
+		}
+	case "dec":
+		if xt.Prec == 0 {
+			return `<xs:element name="` + xt.Name + `"><xs:simpleType><xs:restriction base="xs:decimal"><xs:totalDigits value="38"/></xs:restriction></xs:simpleType></xs:element>`
+		}
+		if xt.Scale == 0 {
+			return fmt.Sprintf(`<xs:element name="%s"><xs:simpleType><xs:restriction base="xs:decimal"><xs:totalDigits value="%d"/></xs:restriction></xs:simpleType></xs:element>`,
+				xt.Name, xt.Prec,
+			)
+		}
+		return fmt.Sprintf(
+			`<xs:element name="%s"><xs:simpleType><xs:restriction base="xs:decimal"><xs:totalDigits value="%d"/><xs:fractionDigits value="%d"/></xs:restriction></xs:simpleType></xs:element>`,
+			xt.Name, xt.Prec, xt.Scale,
+		)
+	}
+	return ""
+}
+
+func xsdTypeFromDocu(docu string) XSDType {
+	if docu == "" {
+		return XSDType{}
+	}
+	xt := XSDType{Documentation: docu}
+	var typ string
+	ms := rOraType.FindStringSubmatch(docu)
+	if len(ms) > 0 {
+		typ = ms[1]
+	}
+	if typ == "" || len(typ) < 3 {
+		return xt
+	}
+
+	b, e := strings.LastIndexByte(typ, '(')+1, len(typ)-1
+	switch typ[:3] {
+	case "CHA", "VAR":
+		var err error
+		if xt.Prec, err = strconv.Atoi(typ[b:e]); err != nil {
+			panic(fmt.Errorf("%q: %w", typ[b:e], err))
+		}
+		xt.Name = "string_" + typ[b:e]
+		return xt
+
+	case "NUM", "INT":
+		if typ[e] == 'R' {
+			return xt
+		}
+		i := strings.IndexByte(typ[b:e], ',')
+		if i < 0 {
+			i = e
+		} else {
+			i += b
+		}
+		//log.Printf("typ=%q b=%d i=%d e=%d", typ, b, i ,e)
+		var err error
+		if xt.Prec, err = strconv.Atoi(typ[b:i]); err != nil {
+			panic(fmt.Errorf("%q: %w", typ[b:i], err))
+		}
+		if i == e {
+			xt.Name = "decimal_" + typ[b:i]
+			return xt
+		}
+
+		if xt.Scale, err = strconv.Atoi(typ[i+1 : e]); err != nil {
+			panic(fmt.Errorf("%q: %w", typ[i+1:e], err))
+		}
+		xt.Name = fmt.Sprintf("decimal_%d_%d", xt.Prec, xt.Scale)
+		return xt
+	}
+	return xt
 }
 
 func mkTypeName(s string) string {
@@ -582,6 +743,14 @@ func gzb64(s string) string {
 		panic(err)
 	}
 	if err := bw.Close(); err != nil {
+		panic(err)
+	}
+	return buf.String()
+}
+
+func xmlEscape(s string) string {
+	var buf bytes.Buffer
+	if err := xml.EscapeText(&buf, []byte(s)); err != nil {
 		panic(err)
 	}
 	return buf.String()
