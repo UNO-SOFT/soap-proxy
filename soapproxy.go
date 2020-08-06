@@ -29,11 +29,14 @@ import (
 	"net/http"
 	"reflect"
 	"time"
+
 	//"regexp"
 	"strings"
 	"sync"
 
 	"github.com/UNO-SOFT/grpcer"
+	"github.com/UNO-SOFT/otel"
+
 	"golang.org/x/net/html/charset"
 	errors "golang.org/x/xerrors"
 	"google.golang.org/grpc"
@@ -78,7 +81,7 @@ var bufPool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]
 
 func (h *SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
-	ctx := r.Context()
+	ctx := otel.ExtractHTTP(r.Context(), r.Header)
 	Log := h.Log
 	if logger, ok := ctx.Value("logger").(interface {
 		Log(...interface{}) error
