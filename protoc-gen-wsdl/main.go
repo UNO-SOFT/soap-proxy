@@ -20,8 +20,8 @@ import (
 	"log"
 	"os"
 
-	"github.com/golang/protobuf/proto"
 	protoc "github.com/golang/protobuf/protoc-gen-go/plugin"
+	"google.golang.org/protobuf/proto"
 )
 
 func main() {
