@@ -1,4 +1,4 @@
-// Copyright 2019 Tamás Gulácsi
+// Copyright 2019, 2020 Tamás Gulácsi
 //
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,8 +28,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	errors "golang.org/x/xerrors"
 
 	"github.com/UNO-SOFT/grpcer"
 	"github.com/tgulacsi/oracall/custom"
@@ -72,7 +70,7 @@ soap:encodingStyle="http://www.w3.org/2003/05/soap-encoding">
 	}
 	var any anyXML
 	if err := dec.DecodeElement(&any, &st); err != nil {
-		t.Error(errors.Errorf("into %T: %v\n%s: %w", any, err, buf.String(), errDecode))
+		t.Error(fmt.Errorf("into %T: %v\n%s: %w", any, err, buf.String(), errDecode))
 	}
 	t.Logf("any=%#v", any)
 }
@@ -178,12 +176,12 @@ func TestDecodeRequest(t *testing.T) {
 				}
 			}
 			if err := dec.DecodeElement(&hdr, st); err != nil {
-				return ctx, nil, errors.Errorf("decode %v: %w", st, err)
+				return ctx, nil, fmt.Errorf("decode %v: %w", st, err)
 			}
 			return ctx, func(ctx context.Context, w io.Writer, _ error) error {
 				hdr.IMSSOAPHeader.ResponseDateTime.Time = time.Now()
 				if err := xml.NewEncoder(w).Encode(hdr.IMSSOAPHeader); err != nil {
-					return errors.Errorf("encode header: %w", err)
+					return fmt.Errorf("encode header: %w", err)
 				}
 				return nil
 			}, nil

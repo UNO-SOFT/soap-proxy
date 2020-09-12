@@ -542,7 +542,7 @@ func mkXSDElement(f Field) string {
 	)
 }
 
-var rOraType = regexp.MustCompile("(?:^|\\s*)(DATE|(?:INTEGER|NUMBER)(?:[(][0-9]+[)])?|VARCHAR2[(][0-9]+[)]|NUMBER[(][0-9]+,[0-9]+[)])$")
+var rOraType = regexp.MustCompile(`(?:^|\s*)(DATE|(?:INTEGER|NUMBER)(?:[(][0-9]+[)])?|VARCHAR2[(][0-9]+[)]|NUMBER[(][0-9]+,[0-9]+[)])$`)
 
 type XSDType struct {
 	Name          string

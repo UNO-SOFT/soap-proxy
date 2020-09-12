@@ -1,4 +1,4 @@
-// Copyright 2019 Tamás Gulácsi
+// Copyright 2019, 2020 Tamás Gulácsi
 //
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,6 +22,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -38,7 +39,6 @@ import (
 	"github.com/UNO-SOFT/otel"
 
 	"golang.org/x/net/html/charset"
-	errors "golang.org/x/xerrors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -243,7 +243,7 @@ func (h *SOAPHandler) decodeRequest(ctx context.Context, r *http.Request) (reque
 	dec := newXMLDecoder(io.TeeReader(r.Body, buf))
 	st, err := findSoapBody(dec)
 	if err != nil {
-		return requestInfo{}, nil, errors.Errorf("findSoapBody in %s: %w", buf.String(), err)
+		return requestInfo{}, nil, fmt.Errorf("findSoapBody in %s: %w", buf.String(), err)
 	}
 	request := requestInfo{SOAPAction: strings.Trim(r.Header.Get("SOAPAction"), `"`)}
 	if h.DecodeHeader != nil {
@@ -254,7 +254,7 @@ func (h *SOAPHandler) decodeRequest(ctx context.Context, r *http.Request) (reque
 		} else {
 			if _, request.EncodeHeader, err = h.DecodeHeader(ctx, hDec, &hSt); err != nil {
 				h.Log("DecodeHeader", err, "header", buf.String())
-				return request, nil, errors.Errorf("decodeHeader: %w", err)
+				return request, nil, fmt.Errorf("decodeHeader: %w", err)
 			}
 		}
 	}
@@ -271,7 +271,7 @@ func (h *SOAPHandler) decodeRequest(ctx context.Context, r *http.Request) (reque
 	if request.Raw {
 		startPos := dec.InputOffset()
 		if err = dec.Skip(); err != nil {
-			return request, nil, errors.Errorf("skip: %w", err)
+			return request, nil, fmt.Errorf("skip: %w", err)
 		}
 		b := bytes.TrimSpace(buf.Bytes()[startPos:dec.InputOffset()])
 		b = b[:bytes.LastIndex(b, []byte("</"))]
@@ -286,7 +286,7 @@ func (h *SOAPHandler) decodeRequest(ctx context.Context, r *http.Request) (reque
 		return request, inp, nil
 	}
 	if st, err = nextStart(dec); err != nil && !errors.Is(err, io.EOF) {
-		return request, nil, errors.Errorf("nextStart: %s: %w", buf.String(), err)
+		return request, nil, fmt.Errorf("nextStart: %s: %w", buf.String(), err)
 	}
 
 	if request.Action == "" {
@@ -296,7 +296,7 @@ func (h *SOAPHandler) decodeRequest(ctx context.Context, r *http.Request) (reque
 	if h.DecodeInput != nil {
 		inp, err := h.DecodeInput(&request.Action, dec, &st)
 		if err != nil {
-			return request, inp, errors.Errorf("%s: %w", buf.String(), err)
+			return request, inp, fmt.Errorf("%s: %w", buf.String(), err)
 		}
 		return request, inp, nil
 	}
@@ -309,7 +309,7 @@ func (h *SOAPHandler) decodeRequest(ctx context.Context, r *http.Request) (reque
 			}
 		}
 		if inp == nil {
-			return request, nil, errors.Errorf("no input for %q: %w", request.Action, errNotFound)
+			return request, nil, fmt.Errorf("no input for %q: %w", request.Action, errNotFound)
 		}
 	}
 
@@ -324,7 +324,7 @@ func (h *SOAPHandler) decodeRequest(ctx context.Context, r *http.Request) (reque
 			h.Log("ERROR", err)
 		}
 
-		err = errors.Errorf("into %T: %v\n%s: %w", inp, err, buf.String(), errDecode)
+		err = fmt.Errorf("into %T: %v\n%s: %w", inp, err, buf.String(), errDecode)
 	}
 	return request, inp, err
 }

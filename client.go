@@ -19,14 +19,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"strconv"
 	"sync"
 	"time"
-
-	errors "golang.org/x/xerrors"
 
 	"github.com/hashicorp/go-retryablehttp"
 	"github.com/tgulacsi/go/httpclient"
@@ -92,7 +91,7 @@ func SOAPCall(ctx context.Context, destURL, action string, reqBody string, resp 
 	buf.Reset()
 	if response.StatusCode >= 400 {
 		io.Copy(buf, response.Body)
-		return errors.Errorf("%s: %w", buf.String(), errors.New(response.Status))
+		return fmt.Errorf("%s: %w", buf.String(), errors.New(response.Status))
 	}
 
 	tr := io.TeeReader(response.Body, buf)
