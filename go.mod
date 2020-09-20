@@ -1,9 +1,11 @@
 module github.com/UNO-SOFT/soap-proxy
 
+go 1.15
+
 require (
 	aqwari.net/xml v0.0.0-20181013063537-841f47b2a098
-	github.com/UNO-SOFT/grpcer v0.5.1
-	github.com/UNO-SOFT/otel v0.0.3
+	github.com/UNO-SOFT/grpcer v0.5.2
+	github.com/UNO-SOFT/otel v0.0.4
 	github.com/golang/protobuf v1.4.2
 	github.com/hashicorp/go-hclog v0.14.1 // indirect
 	github.com/hashicorp/go-retryablehttp v0.6.7
@@ -16,9 +18,3 @@ require (
 	google.golang.org/grpc v1.32.0
 	google.golang.org/protobuf v1.25.0
 )
-
-go 1.13
-
-exclude go.opentelemetry.io/otel v0.11.0
-
-exclude go.opentelemetry.io/otel/sdk v0.11.0
