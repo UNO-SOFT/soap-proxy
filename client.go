@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/http"
 	"strconv"
 	"sync"
 	"time"
@@ -39,26 +40,36 @@ var (
 )
 
 const (
-	SOAPHeader = `<?xml version="1.0" encoding="utf-8"?><soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"><soapenv:Header/><soapenv:Body>`
+	SOAPHeader = `<?xml version="1.0" encoding="utf-8"?><soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"><soapenv:Header>`
+	SOAPBody   = `</soapenv:Header><soapenv:Body>`
 	SOAPFooter = `</soapenv:Body></soapenv:Envelope>`
 )
 
-// SOAPCall destURL with SOAPAction=action, decoding the response body into resp.
-func SOAPCall(ctx context.Context, destURL, action string, reqBody string, resp interface{}, Log func(...interface{}) error) error {
+// SOAPCallWithHeader calls with the given SOAP- and extra header and action.
+func SOAPCallWithHeader(ctx context.Context,
+	destURL string, customize func(req *http.Request),
+	action, soapHeader, reqBody string, resp interface{},
+	Log func(...interface{}) error,
+) error {
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer func() {
 		buf.Reset()
 		bufPool.Put(buf)
 	}()
-	buf.Write([]byte(SOAPHeader))
-	io.WriteString(buf, reqBody)
-	buf.Write([]byte(SOAPFooter))
+	buf.WriteString(SOAPHeader)
+	buf.WriteString(soapHeader)
+	buf.WriteString(SOAPBody)
+	buf.WriteString(reqBody)
+	buf.WriteString(SOAPFooter)
 
 	request, err := retryablehttp.NewRequest("POST", destURL, buf.Bytes())
 	if err != nil {
 		return err
 	}
 	request = request.WithContext(ctx)
+	if customize != nil {
+		customize(request.Request)
+	}
 	request.Header.Set("Content-Type", "text/xml; charset=utf-8")
 	request.Header.Set("SOAPAction", action)
 	request.Header.Set("Length", strconv.Itoa(buf.Len()))
@@ -118,6 +129,11 @@ func SOAPCall(ctx context.Context, destURL, action string, reqBody string, resp 
 		"resp-head", respHead, "resp-tail", respTail,
 		"decoded-length", buf.Len(), "decoded-head", decHead, "decoded-tail", decTail)
 	return nil
+}
+
+// SOAPCall destURL with SOAPAction=action, decoding the response body into resp.
+func SOAPCall(ctx context.Context, destURL, action string, reqBody string, resp interface{}, Log func(...interface{}) error) error {
+	return SOAPCallWithHeader(ctx, destURL, nil, action, "", reqBody, resp, Log)
 }
 
 func splitHeadTail(b []byte, length int) (head string, tail string) {
