@@ -74,7 +74,7 @@ const wsdlTmpl = xml.Header + `<definitions
 	  {{if ne .Name ""}}
 	  <xs:simpleType name="{{.Name}}"><xs:restriction base="xs:
 	  {{- if eq (slice .Name 0 3) "str"}}string"><xs:maxLength value="{{if eq .Prec 0}}32767{{else}}{{.Prec}}{{end}}"/>
-	  {{- else}}decimal"><xs:totalDigits value="{{if eq .Prec 0}}38{{else}}{{.Prec}}{{end}}"/>{{if ne .Scale 0}}<xs:fractionDigits value="{{.Scale}}"/>{{end}}
+	  {{- else}}{{if (and (ne .Prec 0) (eq .Scale 0))}}integer{{else}}decimal{{end}}"><xs:totalDigits value="{{if eq .Prec 0}}38{{else}}{{.Prec}}{{end}}"/>{{if ne .Scale 0}}<xs:fractionDigits value="{{.Scale}}"/>{{end}}
 	  {{end}}</xs:restriction></xs:simpleType>
 	  {{end}}{{end}}
 
@@ -564,7 +564,7 @@ func (xt XSDType) Element() string {
 			return `<xs:element name="` + xt.Name + `"><xs:simpleType><xs:restriction base="xs:decimal"><xs:totalDigits value="38"/></xs:restriction></xs:simpleType></xs:element>`
 		}
 		if xt.Scale == 0 {
-			return fmt.Sprintf(`<xs:element name="%s"><xs:simpleType><xs:restriction base="xs:decimal"><xs:totalDigits value="%d"/></xs:restriction></xs:simpleType></xs:element>`,
+			return fmt.Sprintf(`<xs:element name="%s"><xs:simpleType><xs:restriction base="xs:integer"><xs:totalDigits value="%d"/></xs:restriction></xs:simpleType></xs:element>`,
 				xt.Name, xt.Prec,
 			)
 		}
