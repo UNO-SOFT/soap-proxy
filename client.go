@@ -46,7 +46,8 @@ const (
 )
 
 // SOAPCallWithHeader calls with the given SOAP- and extra header and action.
-func SOAPCallWithHeader(ctx context.Context,
+func SOAPCallWithHeaderClient(ctx context.Context,
+	client *http.Client,
 	destURL string, customize func(req *http.Request),
 	action, soapHeader, reqBody string, resp interface{},
 	Log func(...interface{}) error,
@@ -76,22 +77,27 @@ func SOAPCallWithHeader(ctx context.Context,
 	if Log != nil {
 		Log("POST", destURL, "header", request.Header, "xml", buf.String())
 	}
-	clientsMu.RLock()
-	cl, ok := clients[destURL]
-	clientsMu.RUnlock()
-	if !ok {
-		clientsMu.Lock()
-		if cl, ok = clients[destURL]; !ok {
-			to := DefaultCallTimeout
-			if dl, ok := ctx.Deadline(); ok {
-				if d := time.Until(dl); d > time.Second {
-					to = d
-				}
-			}
-			cl = httpclient.NewWithClient("url="+destURL, nil, 1*time.Second, to, 0.6, Log)
-			clients[destURL] = cl
+	to := DefaultCallTimeout
+	if dl, ok := ctx.Deadline(); ok {
+		if d := time.Until(dl); d > time.Second {
+			to = d
 		}
-		clientsMu.Unlock()
+	}
+	var cl *retryablehttp.Client
+	if client != nil {
+		cl = httpclient.NewWithClient("url="+destURL, client, 1*time.Second, to, 0.6, Log)
+	} else {
+		clientsMu.RLock()
+		cl, ok := clients[destURL]
+		clientsMu.RUnlock()
+		if !ok {
+			clientsMu.Lock()
+			if cl, ok = clients[destURL]; !ok {
+				cl = httpclient.NewWithClient("url="+destURL, nil, 1*time.Second, to, 0.6, Log)
+				clients[destURL] = cl
+			}
+			clientsMu.Unlock()
+		}
 	}
 	response, err := cl.Do(request)
 	if err != nil {
@@ -129,6 +135,15 @@ func SOAPCallWithHeader(ctx context.Context,
 		"resp-head", respHead, "resp-tail", respTail,
 		"decoded-length", buf.Len(), "decoded-head", decHead, "decoded-tail", decTail)
 	return nil
+}
+
+// SOAPCallWithHeader calls with the given SOAP- and extra header and action.
+func SOAPCallWithHeader(ctx context.Context,
+	destURL string, customize func(req *http.Request),
+	action, soapHeader, reqBody string, resp interface{},
+	Log func(...interface{}) error,
+) error {
+	return SOAPCallWithHeaderClient(ctx, nil, destURL, customize, action, soapHeader, reqBody, resp, Log)
 }
 
 // SOAPCall destURL with SOAPAction=action, decoding the response body into resp.
