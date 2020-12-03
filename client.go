@@ -87,8 +87,9 @@ func SOAPCallWithHeaderClient(ctx context.Context,
 	if client != nil {
 		cl = httpclient.NewWithClient("url="+destURL, client, 1*time.Second, to, 0.6, Log)
 	} else {
+		var ok bool
 		clientsMu.RLock()
-		cl, ok := clients[destURL]
+		cl, ok = clients[destURL]
 		clientsMu.RUnlock()
 		if !ok {
 			clientsMu.Lock()
