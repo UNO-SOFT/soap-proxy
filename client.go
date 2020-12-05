@@ -83,23 +83,35 @@ func SOAPCallWithHeaderClient(ctx context.Context,
 			to = d
 		}
 	}
-	var cl *retryablehttp.Client
+	// Cache retryablehttp.Client
+	key := destURL
 	if client != nil {
-		cl = httpclient.NewWithClient("url="+destURL, client, 1*time.Second, to, 0.6, Log)
-	} else {
-		var ok bool
-		clientsMu.RLock()
-		cl, ok = clients[destURL]
-		clientsMu.RUnlock()
-		if !ok {
-			clientsMu.Lock()
-			if cl, ok = clients[destURL]; !ok {
-				cl = httpclient.NewWithClient("url="+destURL, nil, 1*time.Second, to, 0.6, Log)
-				clients[destURL] = cl
-			}
-			clientsMu.Unlock()
-		}
+		key = fmt.Sprintf("#%p", client)
 	}
+	clientsMu.RLock()
+	cl, ok := clients[key]
+	clientsMu.RUnlock()
+	if !ok {
+		clientsMu.Lock()
+		if cl, ok = clients[key]; !ok {
+			cl = httpclient.NewWithClient("url="+destURL, client, 1*time.Second, to, 0.6, Log)
+			// Limit the size of the cache
+			if len(clients) >= 256 {
+				var i int
+				for k := range clients {
+					delete(clients, k)
+					i++
+					if i >= 128 {
+						break
+					}
+				}
+			}
+			clients[key] = cl
+		}
+		clientsMu.Unlock()
+	}
+
+	// Use the client
 	response, err := cl.Do(request)
 	if err != nil {
 		return err
