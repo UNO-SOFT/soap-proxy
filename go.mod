@@ -5,7 +5,7 @@ go 1.15
 require (
 	aqwari.net/xml v0.0.0-20181013063537-841f47b2a098
 	github.com/UNO-SOFT/grpcer v0.5.5
-	github.com/godror/godror v0.20.10 // indirect
+	github.com/godror/godror v0.22.3 // indirect
 	github.com/golang/protobuf v1.4.3
 	github.com/hashicorp/go-hclog v0.14.1 // indirect
 	github.com/hashicorp/go-retryablehttp v0.6.8
