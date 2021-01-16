@@ -1,4 +1,4 @@
-// Copyright 2019, 2020 Tamás Gulácsi
+// Copyright 2019, 2021 Tamás Gulácsi
 //
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,6 +28,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"reflect"
 	"time"
 
@@ -165,6 +166,7 @@ func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter,
 	io.WriteString(w, soapEnvelopeHeader)
 
 	part, recvErr := recv.Recv()
+	next, nextErr := recv.Recv()
 
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
@@ -188,47 +190,190 @@ func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter,
 	}
 	typName := strings.TrimPrefix(fmt.Sprintf("%T", part), "*")
 	buf.Reset()
-	jenc := json.NewEncoder(buf)
-	mw := io.MultiWriter(w, buf)
-	enc := xml.NewEncoder(mw)
-	for {
-		buf.Reset()
-		_ = jenc.Encode(part)
-		Log("recv", buf.String(), "type", typName, "soapAction", request.Action)
-		buf.Reset()
-		var err error
+	shouldMerge := !request.Raw && h.EncodeOutput == nil && nextErr == nil
+	var slice, notSlice []grpcer.Field
+	if shouldMerge {
+		slice, notSlice = grpcer.SliceFields(part, "xml")
+	}
+	if len(slice) == 0 {
+		// Nothing to merge
+		mw := io.MultiWriter(w, buf)
+		enc := xml.NewEncoder(mw)
 		if request.Raw {
 			fmt.Fprintf(mw, "<%s%s_Output%s>", request.Prefix, request.Action, request.Postfix)
-			io.WriteString(mw, reflect.ValueOf(part).Elem().Field(0).String())
-			fmt.Fprintf(mw, "</%s%s_Output>", request.Prefix, request.Action)
-		} else if h.EncodeOutput != nil {
-			err = h.EncodeOutput(enc, part)
-		} else if strings.HasSuffix(typName, "_Output") {
-			space := request.SOAPAction
-			if i := strings.LastIndex(space, ".proto/"); i >= 0 {
-				if j := strings.Index(space[i+7:], "/"); j >= 0 {
-					space = space[:i+7+j] + "_types/"
+		}
+		for {
+			buf.Reset()
+			var err error
+			if request.Raw {
+				io.WriteString(mw, reflect.ValueOf(part).Elem().Field(0).String())
+			} else if h.EncodeOutput != nil {
+				err = h.EncodeOutput(enc, part)
+			} else if strings.HasSuffix(typName, "_Output") {
+				space := request.SOAPAction
+				if i := strings.LastIndex(space, ".proto/"); i >= 0 {
+					if j := strings.Index(space[i+7:], "/"); j >= 0 {
+						space = space[:i+7+j] + "_types/"
+					}
 				}
+				err = enc.EncodeElement(part,
+					xml.StartElement{Name: xml.Name{Local: request.Action + "_Output", Space: space}},
+				)
+			} else {
+				err = enc.Encode(part)
 			}
-			err = enc.EncodeElement(part,
-				xml.StartElement{Name: xml.Name{Local: request.Action + "_Output", Space: space}},
-			)
+			Log("recv-xml", buf.String())
+			if err != nil {
+				Log("msg", "encode", "error", err, "part", part)
+				break
+			}
+			w.Write([]byte{'\n'})
+			if part, err = recv.Recv(); err != nil {
+				if err != io.EOF {
+					Log("msg", "recv", "error", err)
+				}
+				break
+			}
+		}
+		if request.Raw {
+			fmt.Fprintf(mw, "</%s%s_Output>", request.Prefix, request.Action)
+		}
+		return
+	}
+
+	// Merge slices
+	enc := xml.NewEncoder(buf)
+	ss := sliceSaver{files: make(map[string]fileWithTag, len(slice)), buf: buf, enc: enc}
+	defer ss.Close()
+	for {
+		buf.Reset()
+		var err error
+		if next != nil { // first
+			// Encode a "part" with only the non-slice elements filled,
+			// strip & save the closing tag.
+			rv := reflect.Zero(reflect.TypeOf(part))
+			for _, f := range notSlice {
+				rv.FieldByName(f.Name).Set(reflect.ValueOf(f.Value))
+			}
+			buf.Reset()
+			if strings.HasSuffix(typName, "_Output") {
+				space := request.SOAPAction
+				if i := strings.LastIndex(space, ".proto/"); i >= 0 {
+					if j := strings.Index(space[i+7:], "/"); j >= 0 {
+						space = space[:i+7+j] + "_types/"
+					}
+				}
+				err = enc.EncodeElement(rv.Interface(),
+					xml.StartElement{Name: xml.Name{Local: request.Action + "_Output", Space: space}},
+				)
+			} else {
+				err = enc.Encode(rv.Interface())
+			}
+			if err != nil {
+				Log("msg", "encode zero", "value", rv.Interface(), "error", err)
+				break
+			}
+			b := buf.Bytes()
+			_, end, ok := findOuterTag(b)
+			if !ok {
+				Log("msg", "no findOuterTag", "b", string(b))
+				break
+			}
+			if _, err = w.Write(b[:end[0]]); err != nil {
+				Log("msg", "write", "error", err)
+				break
+			}
+			suffix := string(b[end[0]:end[1]])
+			defer io.WriteString(w, suffix)
+		}
+		// Encode slice fields, each into its separate file.
+		rv := reflect.ValueOf(part)
+		for _, f := range slice {
+			rf := rv.FieldByName(f.Name)
+			if rf.Len() == 0 {
+				continue
+			}
+			if err := ss.Encode(f.Name, rf.Interface()); err != nil {
+				Log("msg", "encodeSliceField", "field", f.Name, "error", err)
+				break
+			}
+		}
+
+		if next != nil {
+			part, err = next, nextErr
+			next = nil
 		} else {
-			err = enc.Encode(part)
+			part, err = recv.Recv()
 		}
-		Log("recv-xml", buf.String())
 		if err != nil {
-			Log("msg", "encode", "error", err, "part", part)
-			break
-		}
-		w.Write([]byte{'\n'})
-		if part, err = recv.Recv(); err != nil {
 			if err != io.EOF {
 				Log("msg", "recv", "error", err)
 			}
-			break
+			return
 		}
 	}
+
+	for _, f := range slice {
+		fh := ss.files[f.Name]
+		if _, err := fh.Seek(1, 0); err != nil {
+			Log("msg", "seek", "file", fh.Name(), "error", err)
+			fh.Close()
+			return
+		}
+		_, err := io.Copy(w, fh)
+		fh.Close()
+		if err != nil {
+			Log("msg", "copy", "file", fh.Name(), "error", err)
+		}
+		io.WriteString(w, "</"+fh.Tag+">\n")
+	}
+}
+
+type fileWithTag struct {
+	*os.File
+	Tag string
+}
+
+type sliceSaver struct {
+	buf   *bytes.Buffer
+	files map[string]fileWithTag
+	enc   *xml.Encoder
+}
+
+func (ss sliceSaver) Close() error {
+	for k, f := range ss.files {
+		delete(ss.files, k)
+		f.Close()
+		os.Remove(f.Name())
+	}
+	return nil
+}
+
+func (ss sliceSaver) Encode(name string, value interface{}) error {
+	ss.buf.Reset()
+	err := ss.enc.Encode(value)
+	if err != nil {
+		return err
+	}
+	b := ss.buf.Bytes()
+	start, end, ok := findOuterTag(b)
+	if !ok {
+		return fmt.Errorf("no outer tag found in %q", string(b))
+	}
+
+	fh, ok := ss.files[name]
+	if ok {
+		_, err = fh.Write(b[start[1]:end[0]])
+	} else {
+		if fh.File, err = ioutil.TempFile("", name+"-*.xml"); err != nil {
+			return err
+		}
+		fh.Tag = string(b[end[0]+2 : end[1]])
+		os.Remove(fh.Name())
+		ss.files[name] = fh
+		_, err = fh.Write(b[:end[0]])
+	}
+	return err
 }
 
 var (
@@ -719,6 +864,39 @@ type SOAPFault struct {
 	String  string   `xml:"faultstring,omitempty"`
 	Actor   string   `xml:"faultactor,omitempty"`
 	Detail  string   `xml:"detail>ExceptionDetail,omitempty"`
+}
+
+func findOuterTag(b []byte) (start, end [2]int, ok bool) {
+	off := bytes.IndexByte(b, '<')
+	if off < 0 {
+		return start, end, false
+	}
+	start[0] = off + 1
+	b = b[off:]
+	i := bytes.IndexByte(b, '>')
+	if i < 0 {
+		return start, end, false
+	}
+	start[1] = off + i
+	var tag []byte
+	if j := bytes.IndexByte(b[:i], ' '); j < 0 {
+		tag = b[1:i]
+	} else {
+		tag = b[1:j]
+	}
+	j := bytes.LastIndex(b, append(append(make([]byte, 0, 2+len(tag)), '<', '/'), tag...))
+	if j < 0 {
+		return start, end, false
+	}
+	end[0], end[1] = off+j, off+j+2+len(tag)+1
+	return start, end, true
+}
+func trimOuterTag(b []byte) (string, []byte) {
+	start, end, ok := findOuterTag(b)
+	if !ok {
+		return "", b
+	}
+	return string(b[end[0]+2 : end[1]-1]), b[start[1]+1 : end[0]-1]
 }
 
 // vim: set fileencoding=utf-8 noet:
