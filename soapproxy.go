@@ -38,6 +38,7 @@ import (
 
 	"github.com/UNO-SOFT/grpcer"
 	//"github.com/UNO-SOFT/otel"
+	"github.com/klauspost/compress/zstd"
 
 	"golang.org/x/net/html/charset"
 	"google.golang.org/grpc"
@@ -244,6 +245,10 @@ func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter,
 	// Merge slices
 	enc := xml.NewEncoder(buf)
 	ss := sliceSaver{files: make(map[string]fileWithTag, len(slice)), buf: buf, enc: enc}
+	fieldOrder := make([]string, 0, 2*len(slice))
+	for _, f := range slice {
+		fieldOrder = append(fieldOrder, f.Name)
+	}
 	defer ss.Close()
 	for {
 		buf.Reset()
@@ -251,7 +256,12 @@ func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter,
 		if next != nil { // first
 			// Encode a "part" with only the non-slice elements filled,
 			// strip & save the closing tag.
-			rv := reflect.Zero(reflect.TypeOf(part))
+			tp := reflect.TypeOf(part)
+			if tp.Kind() == reflect.Ptr {
+				tp = tp.Elem()
+			}
+			rv := reflect.New(tp).Elem()
+			//Log("tp", tp, "rv", rv, "kid", rv.Kind())
 			for _, f := range notSlice {
 				rv.FieldByName(f.Name).Set(reflect.ValueOf(f.Value))
 			}
@@ -283,14 +293,19 @@ func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter,
 				Log("msg", "write", "error", err)
 				break
 			}
+			w.Write([]byte{'\n'})
 			suffix := string(b[end[0]:end[1]])
 			defer io.WriteString(w, suffix)
 		}
+
 		// Encode slice fields, each into its separate file.
 		rv := reflect.ValueOf(part)
+		if rv.Kind() == reflect.Ptr {
+			rv = rv.Elem()
+		}
 		for _, f := range slice {
 			rf := rv.FieldByName(f.Name)
-			if rf.Len() == 0 {
+			if rf.IsZero() || rf.Len() == 0 {
 				continue
 			}
 			if err := ss.Encode(f.Name, rf.Interface()); err != nil {
@@ -300,8 +315,7 @@ func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter,
 		}
 
 		if next != nil {
-			part, err = next, nextErr
-			next = nil
+			part, err, next = next, nextErr, nil
 		} else {
 			part, err = recv.Recv()
 		}
@@ -309,28 +323,42 @@ func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter,
 			if err != io.EOF {
 				Log("msg", "recv", "error", err)
 			}
-			return
+			break
+		}
+		slice, notSlice = grpcer.SliceFields(part, "xml")
+		for _, f := range slice {
+			var found bool
+			for _, nm := range fieldOrder {
+				if found = f.Name == nm; found {
+					break
+				}
+			}
+			if !found {
+				fieldOrder = append(fieldOrder, f.Name)
+			}
 		}
 	}
 
-	for _, f := range slice {
-		fh := ss.files[f.Name]
-		if _, err := fh.Seek(1, 0); err != nil {
-			Log("msg", "seek", "file", fh.Name(), "error", err)
-			fh.Close()
-			return
-		}
-		_, err := io.Copy(w, fh)
-		fh.Close()
+	Log("msg", "copy", "files", ss.files)
+	for _, nm := range fieldOrder {
+		tag := ss.files[nm].Tag
+		r, err := ss.GetReader(nm)
 		if err != nil {
-			Log("msg", "copy", "file", fh.Name(), "error", err)
+			Log("msg", "GetReader", "file", nm, "error", err)
+			continue
 		}
-		io.WriteString(w, "</"+fh.Tag+">\n")
+		_, err = io.Copy(w, r)
+		r.Close()
+		if err != nil {
+			Log("msg", "copy", "file", nm, "error", err)
+		}
+		io.WriteString(w, "</"+tag+">\n")
 	}
 }
 
 type fileWithTag struct {
-	*os.File
+	io.WriteCloser
+	File *os.File
 	Tag string
 }
 
@@ -343,8 +371,13 @@ type sliceSaver struct {
 func (ss sliceSaver) Close() error {
 	for k, f := range ss.files {
 		delete(ss.files, k)
-		f.Close()
-		os.Remove(f.Name())
+		if f.WriteCloser != nil {
+			f.WriteCloser.Close()
+		}
+		if f.File != nil {
+			f.File.Close()
+			os.Remove(f.File.Name())
+		}
 	}
 	return nil
 }
@@ -363,18 +396,43 @@ func (ss sliceSaver) Encode(name string, value interface{}) error {
 
 	fh, ok := ss.files[name]
 	if ok {
-		_, err = fh.Write(b[start[1]:end[0]])
+		_, err = fh.Write(append(b[start[1]+1:end[0]], '\n'))
 	} else {
-		if fh.File, err = ioutil.TempFile("", name+"-*.xml"); err != nil {
+		if fh.File, err = ioutil.TempFile("", name+"-*.xml.zst"); err != nil {
 			return err
 		}
-		fh.Tag = string(b[end[0]+2 : end[1]])
-		os.Remove(fh.Name())
+		fh.Tag = string(b[end[0]+2 : end[1]-1])
+		os.Remove(fh.File.Name())
 		ss.files[name] = fh
-		_, err = fh.Write(b[:end[0]])
+		if fh.WriteCloser, err = zstd.NewWriter(fh.File, zstd.WithEncoderLevel(zstd.SpeedFastest)); err !=nil {
+			return err
+		}
+		ss.files[name] = fh
+		_, err = fh.Write(append(b[:end[0]], '\n'))
 	}
 	return err
 }
+func (ss sliceSaver) GetReader(name string) (io.ReadCloser, error) {
+	fh := ss.files[name]
+	delete(ss.files, name)
+	if err := fh.WriteCloser.Close(); err != nil {
+		fh.File.Close()
+		return nil, fmt.Errorf("close writer: %w", err)
+	}
+		if _, err := fh.File.Seek(0, 0); err != nil {
+			fh.File.Close()
+			return nil, fmt.Errorf("seek: %w", err)
+		}
+		r, err := zstd.NewReader(fh.File)
+		if err != nil {
+			fh.File.Close()
+			return nil , err
+		}
+		return struct{
+			io.Reader
+			io.Closer
+		}{r, closerFunc(func() error { r.Close(); return fh.File.Close(); })}, nil
+	}
 
 var (
 	errDecode   = errors.New("decode XML")
@@ -898,5 +956,8 @@ func trimOuterTag(b []byte) (string, []byte) {
 	}
 	return string(b[end[0]+2 : end[1]-1]), b[start[1]+1 : end[0]-1]
 }
+
+type closerFunc func() error 
+func(f closerFunc) Close() error { return f() }
 
 // vim: set fileencoding=utf-8 noet:

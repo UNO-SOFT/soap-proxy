@@ -9,6 +9,7 @@ require (
 	github.com/golang/protobuf v1.4.3
 	github.com/hashicorp/go-hclog v0.14.1 // indirect
 	github.com/hashicorp/go-retryablehttp v0.6.8
+	github.com/klauspost/compress v1.10.0
 	github.com/mitchellh/mapstructure v1.4.0 // indirect
 	github.com/tgulacsi/go v0.13.4
 	github.com/tgulacsi/oracall v0.15.7
