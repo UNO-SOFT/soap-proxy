@@ -195,10 +195,11 @@ func TestDecodeRequest(t *testing.T) {
 	req.Header.Set("SOAPAction", "Login")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	info, part, err := h.decodeRequest(ctx, req)
+	rI, part, err := h.DecodeRequest(ctx, req)
 	if err != nil {
 		t.Fatal(err)
 	}
+	info := rI.(requestInfo)
 	t.Logf("part: %#v", part)
 	t.Logf("info: %#v", info)
 	var buf strings.Builder

@@ -100,7 +100,7 @@ func (h *SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	mayFilterEmptyTags(r, Log)
 
-	request, inp, err := h.decodeRequest(ctx, r)
+	rI, inp, err := h.DecodeRequest(ctx, r)
 	if err != nil {
 		Log("msg", "decode", "into", fmt.Sprintf("%T", inp), "error", err)
 		if errors.Is(err, errDecode) {
@@ -110,6 +110,7 @@ func (h *SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	request := rI.(requestInfo)
 
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
@@ -149,6 +150,8 @@ type requestInfo struct {
 	Prefix, Postfix    string
 	EncodeHeader       func(context.Context, io.Writer, error) error
 }
+
+func (info requestInfo) Name() string { return info.Action }
 
 const (
 	soapEnvelopeHeader = xml.Header + `
@@ -359,7 +362,7 @@ func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter,
 type fileWithTag struct {
 	io.WriteCloser
 	File *os.File
-	Tag string
+	Tag  string
 }
 
 type sliceSaver struct {
@@ -404,7 +407,7 @@ func (ss sliceSaver) Encode(name string, value interface{}) error {
 		fh.Tag = string(b[end[0]+2 : end[1]-1])
 		os.Remove(fh.File.Name())
 		ss.files[name] = fh
-		if fh.WriteCloser, err = zstd.NewWriter(fh.File, zstd.WithEncoderLevel(zstd.SpeedFastest)); err !=nil {
+		if fh.WriteCloser, err = zstd.NewWriter(fh.File, zstd.WithEncoderLevel(zstd.SpeedFastest)); err != nil {
 			return err
 		}
 		ss.files[name] = fh
@@ -419,27 +422,26 @@ func (ss sliceSaver) GetReader(name string) (io.ReadCloser, error) {
 		fh.File.Close()
 		return nil, fmt.Errorf("close writer: %w", err)
 	}
-		if _, err := fh.File.Seek(0, 0); err != nil {
-			fh.File.Close()
-			return nil, fmt.Errorf("seek: %w", err)
-		}
-		r, err := zstd.NewReader(fh.File)
-		if err != nil {
-			fh.File.Close()
-			return nil , err
-		}
-		return struct{
-			io.Reader
-			io.Closer
-		}{r, closerFunc(func() error { r.Close(); return fh.File.Close(); })}, nil
+	if _, err := fh.File.Seek(0, 0); err != nil {
+		fh.File.Close()
+		return nil, fmt.Errorf("seek: %w", err)
 	}
+	r, err := zstd.NewReader(fh.File)
+	if err != nil {
+		fh.File.Close()
+		return nil, err
+	}
+	return struct {
+		io.Reader
+		io.Closer
+	}{r, closerFunc(func() error { r.Close(); return fh.File.Close() })}, nil
+}
 
 var (
-	errDecode   = errors.New("decode XML")
-	errNotFound = errors.New("not found")
+	errDecode = errors.New("decode XML")
 )
 
-func (h *SOAPHandler) decodeRequest(ctx context.Context, r *http.Request) (requestInfo, interface{}, error) {
+func (h *SOAPHandler) DecodeRequest(ctx context.Context, r *http.Request) (grpcer.RequestInfo, interface{}, error) {
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
 	buf.Reset()
@@ -513,7 +515,7 @@ func (h *SOAPHandler) decodeRequest(ctx context.Context, r *http.Request) (reque
 			}
 		}
 		if inp == nil {
-			return request, nil, fmt.Errorf("no input for %q: %w", request.Action, errNotFound)
+			return request, nil, fmt.Errorf("no input for %q: %w", request.Action, grpcer.ErrNotFound)
 		}
 	}
 
@@ -957,7 +959,8 @@ func trimOuterTag(b []byte) (string, []byte) {
 	return string(b[end[0]+2 : end[1]-1]), b[start[1]+1 : end[0]-1]
 }
 
-type closerFunc func() error 
-func(f closerFunc) Close() error { return f() }
+type closerFunc func() error
+
+func (f closerFunc) Close() error { return f() }
 
 // vim: set fileencoding=utf-8 noet:
