@@ -4,7 +4,7 @@ go 1.15
 
 require (
 	aqwari.net/xml v0.0.0-20181013063537-841f47b2a098
-	github.com/UNO-SOFT/grpcer v0.6.0
+	github.com/UNO-SOFT/grpcer v0.6.1
 	github.com/godror/godror v0.22.3 // indirect
 	github.com/golang/protobuf v1.4.3
 	github.com/hashicorp/go-hclog v0.14.1 // indirect
@@ -22,4 +22,4 @@ require (
 	google.golang.org/protobuf v1.25.0
 )
 
-replace github.com/UNO-SOFT/grpcer => ../grpcer
+//replace github.com/UNO-SOFT/grpcer => ../grpcer
