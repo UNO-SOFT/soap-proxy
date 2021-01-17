@@ -28,7 +28,6 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
 	"reflect"
 	"time"
 
@@ -38,7 +37,6 @@ import (
 
 	"github.com/UNO-SOFT/grpcer"
 	//"github.com/UNO-SOFT/otel"
-	"github.com/klauspost/compress/zstd"
 
 	"golang.org/x/net/html/charset"
 	"google.golang.org/grpc"
@@ -345,13 +343,13 @@ func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter,
 	Log("msg", "copy", "files", ss.files)
 	for _, nm := range fieldOrder {
 		tag := ss.files[nm].Tag
-		r, err := ss.GetReader(nm)
+		rc, err := ss.files[nm].GetReader()
 		if err != nil {
 			Log("msg", "GetReader", "file", nm, "error", err)
 			continue
 		}
-		_, err = io.Copy(w, r)
-		r.Close()
+		_, err = io.Copy(w, rc)
+		rc.Close()
 		if err != nil {
 			Log("msg", "copy", "file", nm, "error", err)
 		}
@@ -360,9 +358,8 @@ func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter,
 }
 
 type fileWithTag struct {
-	io.WriteCloser
-	File *os.File
-	Tag  string
+	*grpcer.TempFile
+	Tag string
 }
 
 type sliceSaver struct {
@@ -374,12 +371,8 @@ type sliceSaver struct {
 func (ss sliceSaver) Close() error {
 	for k, f := range ss.files {
 		delete(ss.files, k)
-		if f.WriteCloser != nil {
-			f.WriteCloser.Close()
-		}
-		if f.File != nil {
-			f.File.Close()
-			os.Remove(f.File.Name())
+		if f.TempFile != nil {
+			f.TempFile.Close()
 		}
 	}
 	return nil
@@ -401,40 +394,14 @@ func (ss sliceSaver) Encode(name string, value interface{}) error {
 	if ok {
 		_, err = fh.Write(append(b[start[1]+1:end[0]], '\n'))
 	} else {
-		if fh.File, err = ioutil.TempFile("", name+"-*.xml.zst"); err != nil {
+		if fh.TempFile, err = grpcer.NewTempFile("", name+"-*.xml.zst"); err != nil {
 			return err
 		}
 		fh.Tag = string(b[end[0]+2 : end[1]-1])
-		os.Remove(fh.File.Name())
-		ss.files[name] = fh
-		if fh.WriteCloser, err = zstd.NewWriter(fh.File, zstd.WithEncoderLevel(zstd.SpeedFastest)); err != nil {
-			return err
-		}
 		ss.files[name] = fh
 		_, err = fh.Write(append(b[:end[0]], '\n'))
 	}
 	return err
-}
-func (ss sliceSaver) GetReader(name string) (io.ReadCloser, error) {
-	fh := ss.files[name]
-	delete(ss.files, name)
-	if err := fh.WriteCloser.Close(); err != nil {
-		fh.File.Close()
-		return nil, fmt.Errorf("close writer: %w", err)
-	}
-	if _, err := fh.File.Seek(0, 0); err != nil {
-		fh.File.Close()
-		return nil, fmt.Errorf("seek: %w", err)
-	}
-	r, err := zstd.NewReader(fh.File)
-	if err != nil {
-		fh.File.Close()
-		return nil, err
-	}
-	return struct {
-		io.Reader
-		io.Closer
-	}{r, closerFunc(func() error { r.Close(); return fh.File.Close() })}, nil
 }
 
 var (
@@ -958,9 +925,5 @@ func trimOuterTag(b []byte) (string, []byte) {
 	}
 	return string(b[end[0]+2 : end[1]-1]), b[start[1]+1 : end[0]-1]
 }
-
-type closerFunc func() error
-
-func (f closerFunc) Close() error { return f() }
 
 // vim: set fileencoding=utf-8 noet:
