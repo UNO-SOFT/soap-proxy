@@ -194,7 +194,7 @@ func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter,
 	}
 	typName := strings.TrimPrefix(fmt.Sprintf("%T", part), "*")
 	buf.Reset()
-	shouldMerge := !request.Raw && h.EncodeOutput == nil && nextErr == nil && request.ForbidMerge
+	shouldMerge := !request.Raw && h.EncodeOutput == nil && nextErr == nil && !request.ForbidMerge
 	var slice, notSlice []grpcer.Field
 	if shouldMerge {
 		slice, notSlice = grpcer.SliceFields(part, "xml")
