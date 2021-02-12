@@ -523,21 +523,21 @@ func mkXSDElement(f Field) string {
 			log.Printf("no type name for %s (%s)", f.GetTypeName(), f)
 		}
 	}
-	maxOccurs := 1
+	maxOccurs := "1"
 	if f.GetLabel() == descriptor.FieldDescriptorProto_LABEL_REPEATED {
 		if wrapArray && !strings.HasSuffix(f.GetName(), "_Rec") && cplx { // complex type
 			//log.Println(f.GetName(), f)
 			return fmt.Sprintf(`<xs:element minOccurs="0" nillable="true" maxOccurs="1" name="%s" type="%s_Arr"/>`,
 				name, typ)
 		}
-		maxOccurs = 999
+		maxOccurs = "undefined"
 	}
 	docu := f.Documentation
 	if docu != "" {
 		docu = "<!-- " + docu + " -->\n"
 	}
 	return fmt.Sprintf(
-		`%s<xs:element minOccurs="0" nillable="true" maxOccurs="%d" name="%s" type="%s"/>`,
+		`%s<xs:element minOccurs="0" nillable="true" maxOccurs="%s" name="%s" type="%s"/>`,
 		docu, maxOccurs, name, typ,
 	)
 }
