@@ -22,7 +22,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
-	"strconv"
 	"errors"
 	"fmt"
 	"io"
@@ -30,6 +29,7 @@ import (
 	"log"
 	"net/http"
 	"reflect"
+	"strconv"
 	"time"
 
 	//"regexp"
@@ -148,7 +148,7 @@ type requestInfo struct {
 	Action, SOAPAction string
 	Prefix, Postfix    string
 	EncodeHeader       func(context.Context, io.Writer, error) error
-	ForbidMerge bool
+	ForbidMerge        bool
 }
 
 func (info requestInfo) Name() string { return info.Action }
@@ -383,7 +383,7 @@ func (ss sliceSaver) Close() error {
 
 func (ss sliceSaver) Encode(name string, value interface{}) error {
 	ss.buf.Reset()
-	err := ss.enc.Encode(value)
+	err := ss.enc.EncodeElement(value, xml.StartElement{Name: xml.Name{Local: name}})
 	if err != nil {
 		return err
 	}
@@ -421,7 +421,7 @@ func (h *SOAPHandler) DecodeRequest(ctx context.Context, r *http.Request) (grpce
 	if err != nil {
 		return requestInfo{}, nil, fmt.Errorf("findSoapBody in %s: %w", buf.String(), err)
 	}
-	request := requestInfo{SOAPAction: strings.Trim(r.Header.Get("SOAPAction"), `"`)} 
+	request := requestInfo{SOAPAction: strings.Trim(r.Header.Get("SOAPAction"), `"`)}
 	request.ForbidMerge, _ = strconv.ParseBool(r.Header.Get("Forbid-Merge"))
 	if h.DecodeHeader != nil {
 		hDec := newXMLDecoder(bytes.NewReader(buf.Bytes()))
