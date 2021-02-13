@@ -530,7 +530,7 @@ func mkXSDElement(f Field) string {
 			return fmt.Sprintf(`<xs:element minOccurs="0" nillable="true" maxOccurs="1" name="%s" type="%s_Arr"/>`,
 				name, typ)
 		}
-		maxOccurs = "undefined"
+		maxOccurs = "unbounded"
 	}
 	docu := f.Documentation
 	if docu != "" {
