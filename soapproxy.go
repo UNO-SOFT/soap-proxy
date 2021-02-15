@@ -53,16 +53,15 @@ const textXML = "text/xml; charset=utf-8"
 // WSDL is served on GET requests.
 type SOAPHandler struct {
 	grpcer.Client
-	WSDL         string
-	Log          func(keyvals ...interface{}) error
-	Locations    []string
-	DecodeInput  func(*string, *xml.Decoder, *xml.StartElement) (interface{}, error)
-	EncodeOutput func(*xml.Encoder, interface{}) error
-	DecodeHeader func(context.Context, *xml.Decoder, *xml.StartElement) (context.Context, func(context.Context, io.Writer, error) error, error)
-
-	Timeout           time.Duration
-	wsdlWithLocations string
+	Log               func(keyvals ...interface{}) error
 	annotations       map[string]Annotation
+	DecodeInput       func(*string, *xml.Decoder, *xml.StartElement) (interface{}, error)
+	EncodeOutput      func(*xml.Encoder, interface{}) error
+	DecodeHeader      func(context.Context, *xml.Decoder, *xml.StartElement) (context.Context, func(context.Context, io.Writer, error) error, error)
+	WSDL              string
+	wsdlWithLocations string
+	Locations         []string
+	Timeout           time.Duration
 }
 
 type Annotation struct {
@@ -144,11 +143,11 @@ func (h *SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 type requestInfo struct {
-	Annotation
+	EncodeHeader       func(context.Context, io.Writer, error) error
 	Action, SOAPAction string
 	Prefix, Postfix    string
-	EncodeHeader       func(context.Context, io.Writer, error) error
-	ForbidMerge        bool
+	Annotation
+	ForbidMerge bool
 }
 
 func (info requestInfo) Name() string { return info.Action }

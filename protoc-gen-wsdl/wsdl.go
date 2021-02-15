@@ -200,15 +200,15 @@ func Generate(resp *protoc.CodeGeneratorResponse, req protoc.CodeGeneratorReques
 	// Service, bind and message types from roots.
 	// All other types are from imported dependencies, recursively.
 	type whole struct {
+		GeneratedAt time.Time
 		*descriptor.ServiceDescriptorProto
+		Documentation     map[string]string
+		Types             map[string]*descriptor.DescriptorProto
+		RestrictedTypes   map[string]XSDType
 		Package           string
 		TargetNS, TypesNS string
-		Types             map[string]*descriptor.DescriptorProto
-		GeneratedAt       time.Time
 		Version, Owner    string
 		Locations         []string
-		Documentation     map[string]string
-		RestrictedTypes   map[string]XSDType
 	}
 
 	now := time.Now()
