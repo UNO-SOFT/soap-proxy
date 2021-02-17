@@ -247,7 +247,7 @@ func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter,
 
 	// Merge slices
 	enc := xml.NewEncoder(buf)
-	ss := sliceSaver{files: make(map[string]fileWithTag, len(slice)), buf: buf, enc: enc}
+	ss := sliceSaver{files: make(map[string]*grpcer.TempFile, len(slice)), buf: buf, enc: enc}
 	fieldOrder := make([]string, 0, 2*len(slice))
 	for _, f := range slice {
 		fieldOrder = append(fieldOrder, f.Name)
@@ -344,7 +344,6 @@ func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter,
 
 	Log("msg", "copy", "files", ss.files)
 	for _, nm := range fieldOrder {
-		tag := ss.files[nm].Tag
 		rc, err := ss.files[nm].GetReader()
 		if err != nil {
 			Log("msg", "GetReader", "file", nm, "error", err)
@@ -355,26 +354,20 @@ func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter,
 		if err != nil {
 			Log("msg", "copy", "file", nm, "error", err)
 		}
-		io.WriteString(w, "</"+tag+">\n")
 	}
-}
-
-type fileWithTag struct {
-	*grpcer.TempFile
-	Tag string
 }
 
 type sliceSaver struct {
 	buf   *bytes.Buffer
-	files map[string]fileWithTag
+	files map[string]*grpcer.TempFile
 	enc   *xml.Encoder
 }
 
 func (ss sliceSaver) Close() error {
 	for k, f := range ss.files {
 		delete(ss.files, k)
-		if f.TempFile != nil {
-			f.TempFile.Close()
+		if f != nil {
+			f.Close()
 		}
 	}
 	return nil
@@ -386,23 +379,17 @@ func (ss sliceSaver) Encode(name string, value interface{}) error {
 	if err != nil {
 		return err
 	}
+	ss.buf.WriteByte('\n')
 	b := ss.buf.Bytes()
-	start, end, ok := findOuterTag(b)
-	if !ok {
-		return fmt.Errorf("no outer tag found in %q", string(b))
-	}
 
-	fh, ok := ss.files[name]
-	if ok {
-		_, err = fh.Write(append(b[start[1]+1:end[0]], '\n'))
-	} else {
-		if fh.TempFile, err = grpcer.NewTempFile("", name+"-*.xml.zst"); err != nil {
+	fh := ss.files[name]
+	if fh == nil {
+		if fh, err = grpcer.NewTempFile("", name+"-*.xml.zst"); err != nil {
 			return err
 		}
-		fh.Tag = string(b[end[0]+2 : end[1]-1])
 		ss.files[name] = fh
-		_, err = fh.Write(append(b[:end[0]], '\n'))
 	}
+	_, err = fh.Write(b)
 	return err
 }
 
