@@ -908,12 +908,5 @@ func findOuterTag(b []byte) (start, end [2]int, ok bool) {
 	end[0], end[1] = off+j, off+j+2+len(tag)+1
 	return start, end, true
 }
-func trimOuterTag(b []byte) (string, []byte) {
-	start, end, ok := findOuterTag(b)
-	if !ok {
-		return "", b
-	}
-	return string(b[end[0]+2 : end[1]-1]), b[start[1]+1 : end[0]-1]
-}
 
 // vim: set fileencoding=utf-8 noet:
