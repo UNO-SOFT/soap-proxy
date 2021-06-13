@@ -1,17 +1,6 @@
-// Copyright 2017, 2020 Tamás Gulácsi
+// Copyright 2017, 2021 Tamás Gulácsi
 //
-//
-//    Licensed under the Apache License, Version 2.0 (the "License");
-//    you may not use this file except in compliance with the License.
-//    You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-//    Unless required by applicable law or agreed to in writing, software
-//    distributed under the License is distributed on an "AS IS" BASIS,
-//    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//    See the License for the specific language governing permissions and
-//    limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package main
 
@@ -35,10 +24,15 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/golang/protobuf/protoc-gen-go/descriptor"
-	protoc "github.com/golang/protobuf/protoc-gen-go/plugin"
-	"golang.org/x/sync/errgroup"
+	"google.golang.org/protobuf/compiler/protogen"
+	"google.golang.org/protobuf/types/descriptorpb"
 )
+
+var opts protogen.Options
+
+func main() {
+	opts.Run(Generate)
+}
 
 var IsHidden = func(s string) bool { return strings.HasSuffix(s, "_hidden") }
 var wrapArray = os.Getenv("WRAP_ARRAY") == "1"
@@ -127,7 +121,8 @@ const wsdlTmpl = xml.Header + `<definitions
 </definitions>
 `
 
-func Generate(resp *protoc.CodeGeneratorResponse, req protoc.CodeGeneratorRequest) error {
+func Generate(p *protogen.Plugin) error {
+	req := p.Request
 	destPkg := req.GetParameter()
 	if destPkg == "" {
 		destPkg = "main"
@@ -135,8 +130,8 @@ func Generate(resp *protoc.CodeGeneratorResponse, req protoc.CodeGeneratorReques
 	// Find roots.
 	rootNames := req.GetFileToGenerate()
 	files := req.GetProtoFile()
-	roots := make(map[string]*descriptor.FileDescriptorProto, len(rootNames))
-	allTypes := make(map[string]*descriptor.DescriptorProto, 1024)
+	roots := make(map[string]*descriptorpb.FileDescriptorProto, len(rootNames))
+	allTypes := make(map[string]*descriptorpb.DescriptorProto, 1024)
 	var found int
 	fieldDocs := make(map[string]string)
 	restrictedTypes := make(map[string]XSDType)
@@ -175,7 +170,7 @@ func Generate(resp *protoc.CodeGeneratorResponse, req protoc.CodeGeneratorReques
 		}
 	}
 
-	msgTypes := make(map[string]*descriptor.DescriptorProto, len(allTypes))
+	msgTypes := make(map[string]*descriptorpb.DescriptorProto, len(allTypes))
 	for _, root := range roots {
 		for _, svc := range root.GetService() {
 			for _, m := range svc.GetMethod() {
@@ -201,9 +196,9 @@ func Generate(resp *protoc.CodeGeneratorResponse, req protoc.CodeGeneratorReques
 	// All other types are from imported dependencies, recursively.
 	type whole struct {
 		GeneratedAt time.Time
-		*descriptor.ServiceDescriptorProto
+		*descriptorpb.ServiceDescriptorProto
 		Documentation     map[string]string
-		Types             map[string]*descriptor.DescriptorProto
+		Types             map[string]*descriptorpb.DescriptorProto
 		RestrictedTypes   map[string]XSDType
 		Package           string
 		TargetNS, TypesNS string
@@ -212,106 +207,109 @@ func Generate(resp *protoc.CodeGeneratorResponse, req protoc.CodeGeneratorReques
 	}
 
 	now := time.Now()
-	var grp errgroup.Group
-	var mu sync.Mutex
-	resp.File = make([]*protoc.CodeGeneratorResponse_File, 0, len(roots))
 	for _, root := range roots {
 		root := root
 		pkg := root.GetName()
 		for svcNo, svc := range root.GetService() {
-			grp.Go(func() error {
-				methods := svc.GetMethod()
-				data := whole{
-					Package:  svc.GetName(),
-					TargetNS: "http://" + pkg + "/" + svc.GetName() + "/",
-					TypesNS:  "http://" + pkg + "/" + svc.GetName() + "_types/",
-					Types:    msgTypes,
+			methods := svc.GetMethod()
+			data := whole{
+				Package:  svc.GetName(),
+				TargetNS: "http://" + pkg + "/" + svc.GetName() + "/",
+				TypesNS:  "http://" + pkg + "/" + svc.GetName() + "_types/",
+				Types:    msgTypes,
 
-					ServiceDescriptorProto: svc,
-					GeneratedAt:            now,
-					Documentation:          make(map[string]string),
-					RestrictedTypes:        restrictedTypes,
-				}
-				for k, v := range fieldDocs {
-					data.Documentation[k] = v
-				}
-				if si := root.GetSourceCodeInfo(); si != nil {
-					for _, loc := range si.GetLocation() {
-						if path := loc.GetPath(); len(path) == 4 && path[0] == 6 && path[1] == int32(svcNo) && path[2] == 2 {
-							s := strings.TrimPrefix(strings.Replace(loc.GetLeadingComments(), "\n/", "\n", -1), "/")
+				ServiceDescriptorProto: svc,
+				GeneratedAt:            now,
+				Documentation:          make(map[string]string),
+				RestrictedTypes:        restrictedTypes,
+			}
+			for k, v := range fieldDocs {
+				data.Documentation[k] = v
+			}
+			if si := root.GetSourceCodeInfo(); si != nil {
+				for _, loc := range si.GetLocation() {
+					if path := loc.GetPath(); len(path) == 4 && path[0] == 6 && path[1] == int32(svcNo) && path[2] == 2 {
+						s := strings.TrimPrefix(strings.Replace(loc.GetLeadingComments(), "\n/", "\n", -1), "/")
 
-							const nsEq = "REPLACE namespace=\""
-							if i := strings.Index(s, nsEq); i >= 0 {
-								i += len(nsEq)
-								if j := strings.IndexByte(s[i:], '"'); j >= 0 {
-									tbr := s[i : i+j]
-									// remove <!-- REPLACE namespace="..." -->
-									i = strings.LastIndex(s[:i], "<!--")
-									j += strings.Index(s[j:], "-->")
-									s = s[:i] + s[j+3:]
-									// replace namespace to TypesNS
-									s = strings.Replace(s, tbr, data.TypesNS, -1)
-								}
+						const nsEq = "REPLACE namespace=\""
+						if i := strings.Index(s, nsEq); i >= 0 {
+							i += len(nsEq)
+							if j := strings.IndexByte(s[i:], '"'); j >= 0 {
+								tbr := s[i : i+j]
+								// remove <!-- REPLACE namespace="..." -->
+								i = strings.LastIndex(s[:i], "<!--")
+								j += strings.Index(s[j:], "-->")
+								s = s[:i] + s[j+3:]
+								// replace namespace to TypesNS
+								s = strings.Replace(s, tbr, data.TypesNS, -1)
 							}
-							data.Documentation[methods[int(path[3])].GetName()] = s
 						}
+						data.Documentation[methods[int(path[3])].GetName()] = s
 					}
 				}
+			}
 
-				destFn := strings.TrimSuffix(path.Base(pkg), ".proto") + ".wsdl"
-				buf := bufPool.Get().(*bytes.Buffer)
+			destFn := strings.TrimSuffix(path.Base(pkg), ".proto") + ".wsdl"
+			buf := bufPool.Get().(*bytes.Buffer)
+			buf.Reset()
+			buf2 := bufPool.Get().(*bytes.Buffer)
+			buf2.Reset()
+			defer func() {
 				buf.Reset()
-				buf2 := bufPool.Get().(*bytes.Buffer)
+				bufPool.Put(buf)
 				buf2.Reset()
-				defer func() {
-					buf.Reset()
-					bufPool.Put(buf)
-					buf2.Reset()
-					bufPool.Put(buf2)
-				}()
-				err := wsdlTemplate.Execute(buf, data)
-				content := buf.String()
-				if err == nil {
-					ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-					cmd := exec.CommandContext(ctx, "xmllint", "--format", "-")
-					cmd.Stdin = bytes.NewReader(buf.Bytes())
-					cmd.Stdout, cmd.Stderr = buf2, os.Stderr
-					fmtErr := cmd.Run()
-					cancel()
-					if fmtErr != nil {
-						log.Println(cmd.Args, fmtErr)
-					} else {
-						content = buf2.String()
-					}
+				bufPool.Put(buf2)
+			}()
+			err := wsdlTemplate.Execute(buf, data)
+			if err != nil {
+				p.Error(err)
+				return err
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			cmd := exec.CommandContext(ctx, "xmllint", "--format", "-")
+			content := buf.Bytes()
+			var gzContent []byte
+			cmd.Stdin = bytes.NewReader(content)
+			cmd.Stdout, cmd.Stderr = buf2, os.Stderr
+			fmtErr := cmd.Run()
+			cancel()
+			if fmtErr != nil {
+				log.Println(cmd.Args, fmtErr)
+				buf2.Reset()
+				if gzErr := gzb64(buf2, content); gzErr != nil {
+					return gzErr
 				}
-				mu.Lock()
-				if err != nil {
-					errS := err.Error()
-					resp.Error = &errS
+				gzContent = buf2.Bytes()
+			} else {
+				content = buf2.Bytes()
+				buf.Reset()
+				if gzErr := gzb64(buf, content); gzErr != nil {
+					return gzErr
 				}
-				resp.File = append(resp.File,
-					&protoc.CodeGeneratorResponse_File{
-						Name:    &destFn,
-						Content: &content,
-					})
-				// also, embed the wsdl
-				goFn := destFn + ".go"
-				goContent := `package ` + destPkg + `
+				gzContent = buf.Bytes()
+			}
+			if _, err = p.NewGeneratedFile(destFn, protogen.GoImportPath(pkg)).Write(
+				content,
+			); err != nil {
+				return err
+			}
+
+			// also, embed the wsdl
+			if _, err = fmt.Fprintf(
+				p.NewGeneratedFile(destFn+".go", protogen.GoImportPath(pkg)),
+				`package %s
 
 // WSDLgzb64 contains the WSDL, gzipped and base64-encoded.
 // You can easily read it with soapproxy.Ungzb64.
-const WSDLgzb64 = ` + "`" + gzb64(content) + "`\n"
-				resp.File = append(resp.File,
-					&protoc.CodeGeneratorResponse_File{
-						Name:    &goFn,
-						Content: &goContent,
-					})
-				mu.Unlock()
-				return nil
-			})
+const WSDLgzb64 = `+"`%s`\n",
+				destPkg, gzContent,
+			); err != nil {
+				return err
+			}
 		}
 	}
-	return grp.Wait()
+	return nil
 }
 
 var bufPool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]byte, 0, 4096)) }}
@@ -345,13 +343,13 @@ var xsdTypeTemplate = template.Must(
 `))
 
 type typer struct {
-	Types       map[string]*descriptor.DescriptorProto
+	Types       map[string]*descriptorpb.DescriptorProto
 	inputRawXml map[string]struct{}
 
 	seen map[string]struct{}
 }
 
-func (t *typer) mkType(fullName string, m *descriptor.DescriptorProto, documentation map[string]string) string {
+func (t *typer) mkType(fullName string, m *descriptorpb.DescriptorProto, documentation map[string]string) string {
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	defer func() {
@@ -360,7 +358,7 @@ func (t *typer) mkType(fullName string, m *descriptor.DescriptorProto, documenta
 	}()
 
 	// <BrunoLevelek_Output><PLevelek><SzerzAzon>1</SzerzAzon><Tipus></Tipus><Url></Url><Datum></Datum></PLevelek><PLevelek><SzerzAzon>2</SzerzAzon><Tipus>f</Tipus><Url></Url><Datum></Datum></PLevelek><PHibaKod>0</PHibaKod><PHibaSzov></PHibaSzov></BrunoLevelek_Output>Hello, playground
-	subTypes := make(map[string][]*descriptor.FieldDescriptorProto)
+	subTypes := make(map[string][]*descriptorpb.FieldDescriptorProto)
 	mFields := m.GetField()
 	if len(mFields) == 1 && mFields[0].GetType().String() == "TYPE_STRING" {
 		name := mkTypeName(fullName)
@@ -420,19 +418,19 @@ func (t *typer) mkType(fullName string, m *descriptor.DescriptorProto, documenta
 		}
 	}
 
-	var addFieldSubtypes func(mFields []*descriptor.FieldDescriptorProto)
-	addFieldSubtypes = func(mFields []*descriptor.FieldDescriptorProto) {
+	var addFieldSubtypes func(mFields []*descriptorpb.FieldDescriptorProto)
+	addFieldSubtypes = func(mFields []*descriptorpb.FieldDescriptorProto) {
 		for _, f := range mFields {
 			tn := mkTypeName(f.GetTypeName())
 			if tn == "" || len(subTypes[tn]) != 0 {
 				continue
 			}
-			if wrapArray && f.GetLabel() == descriptor.FieldDescriptorProto_LABEL_REPEATED {
+			if wrapArray && f.GetLabel() == descriptorpb.FieldDescriptorProto_LABEL_REPEATED {
 				arr := *f
 				nm := f.GetName() + "_Rec"
 				arr.Name = &nm
 
-				subTypes[tn+"_Arr"] = []*descriptor.FieldDescriptorProto{&arr}
+				subTypes[tn+"_Arr"] = []*descriptorpb.FieldDescriptorProto{&arr}
 			}
 			ft := t.Types[f.GetTypeName()].GetField()
 			subTypes[tn] = ft
@@ -445,7 +443,7 @@ func (t *typer) mkType(fullName string, m *descriptor.DescriptorProto, documenta
 		Name   string
 		Fields []Field
 	}
-	newFields := func(name string, fields []*descriptor.FieldDescriptorProto) Fields {
+	newFields := func(name string, fields []*descriptorpb.FieldDescriptorProto) Fields {
 		ff := filterHiddenFields(fields)
 		fs := Fields{Name: name, Fields: make([]Field, len(ff))}
 		for i, f := range ff {
@@ -485,11 +483,11 @@ func (t *typer) mkType(fullName string, m *descriptor.DescriptorProto, documenta
 }
 
 type Field struct {
-	*descriptor.FieldDescriptorProto
+	*descriptorpb.FieldDescriptorProto
 	XSDTypeName, Documentation string
 }
 
-func filterHiddenFields(fields []*descriptor.FieldDescriptorProto) []*descriptor.FieldDescriptorProto {
+func filterHiddenFields(fields []*descriptorpb.FieldDescriptorProto) []*descriptorpb.FieldDescriptorProto {
 	if IsHidden == nil {
 		return fields
 	}
@@ -524,7 +522,7 @@ func mkXSDElement(f Field) string {
 		}
 	}
 	maxOccurs := "1"
-	if f.GetLabel() == descriptor.FieldDescriptorProto_LABEL_REPEATED {
+	if f.GetLabel() == descriptorpb.FieldDescriptorProto_LABEL_REPEATED {
 		if wrapArray && !strings.HasSuffix(f.GetName(), "_Rec") && cplx { // complex type
 			//log.Println(f.GetName(), f)
 			return fmt.Sprintf(`<xs:element minOccurs="0" nillable="true" maxOccurs="1" name="%s" type="%s_Arr"/>`,
@@ -649,40 +647,40 @@ func mkTypeName(s string) string {
 	return s
 }
 
-func xsdType(t descriptor.FieldDescriptorProto_Type, typeName string) string {
+func xsdType(t descriptorpb.FieldDescriptorProto_Type, typeName string) string {
 	switch t {
-	case descriptor.FieldDescriptorProto_TYPE_DOUBLE:
+	case descriptorpb.FieldDescriptorProto_TYPE_DOUBLE:
 		return "xs:double"
-	case descriptor.FieldDescriptorProto_TYPE_FLOAT:
+	case descriptorpb.FieldDescriptorProto_TYPE_FLOAT:
 		return "xs:float"
-	case descriptor.FieldDescriptorProto_TYPE_INT64,
-		descriptor.FieldDescriptorProto_TYPE_FIXED64,
-		descriptor.FieldDescriptorProto_TYPE_SFIXED64,
-		descriptor.FieldDescriptorProto_TYPE_SINT64:
+	case descriptorpb.FieldDescriptorProto_TYPE_INT64,
+		descriptorpb.FieldDescriptorProto_TYPE_FIXED64,
+		descriptorpb.FieldDescriptorProto_TYPE_SFIXED64,
+		descriptorpb.FieldDescriptorProto_TYPE_SINT64:
 		return "xs:long"
-	case descriptor.FieldDescriptorProto_TYPE_UINT64:
+	case descriptorpb.FieldDescriptorProto_TYPE_UINT64:
 		return "xs:unsignedLong"
-	case descriptor.FieldDescriptorProto_TYPE_INT32,
-		descriptor.FieldDescriptorProto_TYPE_FIXED32,
-		descriptor.FieldDescriptorProto_TYPE_SFIXED32,
-		descriptor.FieldDescriptorProto_TYPE_SINT32:
+	case descriptorpb.FieldDescriptorProto_TYPE_INT32,
+		descriptorpb.FieldDescriptorProto_TYPE_FIXED32,
+		descriptorpb.FieldDescriptorProto_TYPE_SFIXED32,
+		descriptorpb.FieldDescriptorProto_TYPE_SINT32:
 		return "xs:int"
-	case descriptor.FieldDescriptorProto_TYPE_BOOL:
+	case descriptorpb.FieldDescriptorProto_TYPE_BOOL:
 		return "xs:boolean"
-	case descriptor.FieldDescriptorProto_TYPE_STRING:
+	case descriptorpb.FieldDescriptorProto_TYPE_STRING:
 		return "xs:string"
-	case descriptor.FieldDescriptorProto_TYPE_GROUP:
+	case descriptorpb.FieldDescriptorProto_TYPE_GROUP:
 		return "?grp?"
-	case descriptor.FieldDescriptorProto_TYPE_MESSAGE:
+	case descriptorpb.FieldDescriptorProto_TYPE_MESSAGE:
 		if typeName == ".google.protobuf.Timestamp" {
 			return "xs:dateTime"
 		}
 		return "?msg?"
-	case descriptor.FieldDescriptorProto_TYPE_BYTES:
+	case descriptorpb.FieldDescriptorProto_TYPE_BYTES:
 		return "xs:base64Binary"
-	case descriptor.FieldDescriptorProto_TYPE_UINT32:
+	case descriptorpb.FieldDescriptorProto_TYPE_UINT32:
 		return "xs:unsignedInt"
-	case descriptor.FieldDescriptorProto_TYPE_ENUM:
+	case descriptorpb.FieldDescriptorProto_TYPE_ENUM:
 		return "?enum?"
 	}
 	return "???"
@@ -729,23 +727,19 @@ func CamelCase(text string) string {
 	)
 }
 
-func gzb64(s string) string {
-	buf := bufPool.Get().(*bytes.Buffer)
-	defer func() {
-		buf.Reset()
-		bufPool.Put(buf)
-	}()
-	buf.Reset()
-	bw := base64.NewEncoder(base64.StdEncoding, buf)
+func gzb64(w io.Writer, b []byte) error {
+	bw := base64.NewEncoder(base64.StdEncoding, w)
 	gw := gzip.NewWriter(bw)
-	io.WriteString(gw, s)
+	if _, err := gw.Write(b); err != nil {
+		return err
+	}
 	if err := gw.Close(); err != nil {
-		panic(err)
+		return err
 	}
 	if err := bw.Close(); err != nil {
-		panic(err)
+		return err
 	}
-	return buf.String()
+	return nil
 }
 
 func xmlEscape(s string) string {

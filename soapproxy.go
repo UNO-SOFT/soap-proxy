@@ -497,7 +497,7 @@ func (h *SOAPHandler) getWSDL() string {
 		return h.wsdlWithLocations
 	}
 	h.wsdlWithLocations = h.WSDL
-	if len(h.Locations) < 0 {
+	if len(h.Locations) == 0 {
 		return h.wsdlWithLocations
 	}
 	i := strings.LastIndex(h.WSDL, "</port>")

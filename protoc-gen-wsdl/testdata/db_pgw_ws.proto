@@ -1,0 +1,136 @@
+syntax = "proto3";
+
+package db_pgw_ws;
+option go_package = "unosoft.hu/ws/aeg/pb/db_pgw_ws";
+import "google/protobuf/timestamp.proto";
+
+
+message BankkartyaRegisztracio_Input {
+
+	// 
+	// VARCHAR2(24)
+	string p_reg_id = 1;
+
+	// 
+	// NUMBER(9)
+	sint32 p_szerz_azon = 2;
+}
+
+// 7.3.7. Payment Gateway-től a Portfólió rendszer felé token adatok
+// Rendszeres bankkártyás fizetéshez SP-től kapott token adatok továbbításra kerülnek portfólió rendszer felé.
+message BankkartyaRegisztracio_Output {
+
+	// 
+	// INTEGER(10)
+	sint32 p_hiba_kod = 1;
+
+	// 
+	// VARCHAR2(32767)
+	string p_hiba_szov = 2;
+}
+
+// p_limit IN osszeg_t DEFAULT NULL,     --a tokennel indítható legnagyobb tranzakciós összeg
+message BankkartyaRegisztracioTorles_Input {
+
+	// 
+	// VARCHAR2(24)
+	string p_reg_id = 1;
+
+	// 
+	// NUMBER(9)
+	sint32 p_szerz_azon = 2;
+}
+
+// p_limit IN osszeg_t DEFAULT NULL,     --a tokennel indítható legnagyobb tranzakciós összeg
+message BankkartyaRegisztracioTorles_Output {
+
+	// 
+	// INTEGER(10)
+	sint32 p_hiba_kod = 1;
+
+	// 
+	// VARCHAR2(32767)
+	string p_hiba_szov = 2;
+}
+
+//   PROCEDURE beszedes_visszaigazolas(
+//     p_order_ref IN ref_t, --OrderRef
+//     p_statusz IN vc10_t, --OK / ERROR
+//     p_statusz_ok IN VARCHAR2,
+//     
+//     p_banknap IN DATE,
+//     p_hiba_kod OUT PLS_INTEGER, -- -1598=fut a zárás
+//     p_hiba_szov OUT VARCHAR2);
+message MoneyIn_Input {
+
+	// 
+	// VARCHAR2(35)
+	string p_tran_azon = 1;
+
+	// 
+	// DATE
+	google.protobuf.Timestamp p_erteknap = 2;
+
+	// 
+	// VARCHAR2(3)
+	string p_devizanem = 3;
+
+	// 
+	// NUMBER(12, 2)
+	string p_osszeg = 4;
+
+	// 
+	// NUMBER(9)
+	sint32 p_szerz_azon = 5;
+
+	// 
+	// VARCHAR2(240)
+	string p_kozlemeny = 6;
+
+	// 
+	// NUMBER(3)
+	sint32 p_ifi_mozgaskod = 7;
+}
+
+//   PROCEDURE beszedes_visszaigazolas(
+//     p_order_ref IN ref_t, --OrderRef
+//     p_statusz IN vc10_t, --OK / ERROR
+//     p_statusz_ok IN VARCHAR2,
+//     
+//     p_banknap IN DATE,
+//     p_hiba_kod OUT PLS_INTEGER, -- -1598=fut a zárás
+//     p_hiba_szov OUT VARCHAR2);
+message MoneyIn_Output {
+
+	// 
+	// INTEGER(10)
+	sint32 p_hiba_kod = 1;
+
+	// 
+	// VARCHAR2(32767)
+	string p_hiba_szov = 2;
+}
+
+service DbPgwWs {
+	
+// 
+// 7.3.7. Payment Gateway-től a Portfólió rendszer felé token adatok
+// Rendszeres bankkártyás fizetéshez SP-től kapott token adatok továbbításra kerülnek portfólió rendszer felé.
+// 
+rpc BankkartyaRegisztracio (BankkartyaRegisztracio_Input) returns (BankkartyaRegisztracio_Output) {}
+	
+// p_limit IN osszeg_t DEFAULT NULL,     --a tokennel indítható legnagyobb tranzakciós összeg
+rpc BankkartyaRegisztracioTorles (BankkartyaRegisztracioTorles_Input) returns (BankkartyaRegisztracioTorles_Output) {}
+	
+// 
+//   PROCEDURE beszedes_visszaigazolas(
+//     p_order_ref IN ref_t, --OrderRef
+//     p_statusz IN vc10_t, --OK / ERROR
+//     p_statusz_ok IN VARCHAR2,
+//     
+//     p_banknap IN DATE,
+//     p_hiba_kod OUT PLS_INTEGER, -- -1598=fut a zárás
+//     p_hiba_szov OUT VARCHAR2);
+//   
+rpc MoneyIn (MoneyIn_Input) returns (MoneyIn_Output) {}
+}
