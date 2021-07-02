@@ -4,7 +4,7 @@ go 1.15
 
 require (
 	aqwari.net/xml v0.0.0-20181013063537-841f47b2a098
-	github.com/UNO-SOFT/grpcer v0.7.1
+	github.com/UNO-SOFT/grpcer v0.7.2
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-hclog v0.14.1 // indirect
 	github.com/hashicorp/go-retryablehttp v0.7.0
