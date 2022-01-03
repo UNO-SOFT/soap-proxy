@@ -444,8 +444,15 @@ func (h *SOAPHandler) DecodeRequest(ctx context.Context, r *http.Request) (grpce
 		h.Log("prefix", request.Prefix, "postfix", request.Postfix)
 
 		inp := h.Input(request.Action)
-		h.Log("rawXML", rawXML, "inp", inp, "T", fmt.Sprintf("%T", inp))
-		reflect.ValueOf(inp).Elem().Field(0).SetString(rawXML)
+		h.Log("rawXML", rawXML, "inp", fmt.Sprintf("%#v", inp), "T", fmt.Sprintf("%T", inp))
+		rv := reflect.ValueOf(inp).Elem()
+		rt := rv.Type()
+		for i := 0; i < rt.NumField(); i++ {
+			if rt.Field(i).IsExported() {
+				rv.Field(i).SetString(rawXML)
+				break
+			}
+		}
 		return request, inp, nil
 	}
 	if st, err = nextStart(dec); err != nil && !errors.Is(err, io.EOF) {
