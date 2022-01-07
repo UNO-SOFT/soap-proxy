@@ -4,7 +4,7 @@ go 1.15
 
 require (
 	aqwari.net/xml v0.0.0-20181013063537-841f47b2a098
-	github.com/UNO-SOFT/grpcer v0.7.7
+	github.com/UNO-SOFT/grpcer v0.7.8
 	github.com/hashicorp/go-retryablehttp v0.7.0
 	github.com/tgulacsi/go v0.19.3
 	github.com/tgulacsi/oracall v0.22.1
