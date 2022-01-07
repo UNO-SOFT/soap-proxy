@@ -1,4 +1,4 @@
-// Copyright 2019, 2021 Tamás Gulácsi
+// Copyright 2019, 2022 Tamás Gulácsi
 //
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
@@ -170,6 +170,7 @@ func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter,
 
 	part, recvErr := recv.Recv()
 	next, nextErr := recv.Recv()
+	Log("msg", "encodeResponse", "recvErr", recvErr, "nextErr", nextErr)
 
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
@@ -210,7 +211,15 @@ func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter,
 			buf.Reset()
 			var err error
 			if request.Raw {
-				io.WriteString(mw, reflect.ValueOf(part).Elem().Field(0).String())
+				// Use the first exported field
+				rv := reflect.ValueOf(part).Elem()
+				rt := rv.Type()
+				for i := 0; i < rt.NumField(); i++ {
+					if rt.Field(i).IsExported() {
+						io.WriteString(mw, rv.Field(i).String())
+						break
+					}
+				}
 			} else if h.EncodeOutput != nil {
 				err = h.EncodeOutput(enc, part)
 			} else if strings.HasSuffix(typName, "_Output") {
