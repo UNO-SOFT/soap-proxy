@@ -1,4 +1,4 @@
-// Copyright 2020 Tamás Gulácsi
+// Copyright 2020, 2022 Tamás Gulácsi
 //
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,18 +25,20 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strconv"
-	"sync"
 	"time"
 
-	"github.com/hashicorp/go-retryablehttp"
-	"github.com/tgulacsi/go/httpclient"
+	"github.com/rogpeppe/retry"
 )
 
 var (
 	DefaultCallTimeout = time.Minute
 
-	clientsMu sync.RWMutex
-	clients   = make(map[string]*retryablehttp.Client)
+	retryStrategy = retry.Strategy{
+		Delay:       100 * time.Millisecond,
+		MaxDelay:    5 * time.Second,
+		MaxDuration: 30 * time.Second,
+		Factor:      2,
+	}
 )
 
 const (
@@ -63,58 +65,38 @@ func SOAPCallWithHeaderClient(ctx context.Context,
 	buf.WriteString(reqBody)
 	buf.WriteString(SOAPFooter)
 
-	request, err := retryablehttp.NewRequest("POST", destURL, buf.Bytes())
-	if err != nil {
-		return err
+	if client == nil {
+		client = http.DefaultClient
 	}
-	request = request.WithContext(ctx)
-	if customize != nil {
-		customize(request.Request)
-	}
-	request.Header.Set("Content-Type", "text/xml; charset=utf-8")
-	request.Header.Set("SOAPAction", action)
-	request.Header.Set("Length", strconv.Itoa(buf.Len()))
-	if Log != nil {
-		Log("POST", destURL, "header", request.Header, "xml", buf.String())
-	}
-	to := DefaultCallTimeout
+	retryStrategy := retryStrategy
 	if dl, ok := ctx.Deadline(); ok {
 		if d := time.Until(dl); d > time.Second {
-			to = d
+			retryStrategy.MaxDuration = d
 		}
 	}
-	// Cache retryablehttp.Client
-	key := destURL
-	if client != nil {
-		key = fmt.Sprintf("#%p", client)
-	}
-	clientsMu.RLock()
-	cl, ok := clients[key]
-	clientsMu.RUnlock()
-	if !ok {
-		clientsMu.Lock()
-		if cl, ok = clients[key]; !ok {
-			cl = httpclient.NewWithClient("url="+destURL, client, 1*time.Second, to, 0.6, Log)
-			// Limit the size of the cache
-			if len(clients) >= 256 {
-				var i int
-				for k := range clients {
-					delete(clients, k)
-					i++
-					if i >= 128 {
-						break
-					}
-				}
-			}
-			clients[key] = cl
+	var response *http.Response
+	for iter := retryStrategy.Start(); ; {
+		request, err := http.NewRequest("POST", destURL, bytes.NewReader(buf.Bytes()))
+		if err != nil {
+			return err
 		}
-		clientsMu.Unlock()
-	}
+		request = request.WithContext(ctx)
+		if customize != nil {
+			customize(request)
+		}
+		request.Header.Set("Content-Type", "text/xml; charset=utf-8")
+		request.Header.Set("SOAPAction", action)
+		request.Header.Set("Length", strconv.Itoa(buf.Len()))
+		if Log != nil {
+			Log("POST", destURL, "header", request.Header, "xml", buf.String())
+		}
 
-	// Use the client
-	response, err := cl.Do(request)
-	if err != nil {
-		return err
+		if response, err = client.Do(request); err == nil {
+			break
+		}
+		if !iter.Next(ctx.Done()) {
+			return err
+		}
 	}
 	defer response.Body.Close()
 
