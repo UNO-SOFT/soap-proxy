@@ -426,9 +426,19 @@ func (t *typer) mkType(fullName string, m *descriptorpb.DescriptorProto, documen
 				continue
 			}
 			if wrapArray && f.GetLabel() == descriptorpb.FieldDescriptorProto_LABEL_REPEATED {
-				arr := *f
 				nm := f.GetName() + "_Rec"
-				arr.Name = &nm
+				arr := descriptorpb.FieldDescriptorProto{
+					Name:           &nm,
+					Number:         f.Number,
+					Label:          f.Label,
+					Type:           f.Type,
+					TypeName:       f.TypeName,
+					Extendee:       f.Extendee,
+					OneofIndex:     f.OneofIndex,
+					JsonName:       f.JsonName,
+					Options:        f.Options,
+					Proto3Optional: f.Proto3Optional,
+				}
 
 				subTypes[tn+"_Arr"] = []*descriptorpb.FieldDescriptorProto{&arr}
 			}
