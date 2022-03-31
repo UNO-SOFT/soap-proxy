@@ -27,6 +27,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/go-logr/logr"
 	"github.com/rogpeppe/retry"
 )
 
@@ -52,7 +53,6 @@ func SOAPCallWithHeaderClient(ctx context.Context,
 	client *http.Client,
 	destURL string, customize func(req *http.Request),
 	action, soapHeader, reqBody string, resp interface{},
-	Log func(...interface{}) error,
 ) error {
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer func() {
@@ -74,6 +74,7 @@ func SOAPCallWithHeaderClient(ctx context.Context,
 			retryStrategy.MaxDuration = d
 		}
 	}
+	logger := logr.FromContextOrDiscard(ctx)
 	var response *http.Response
 	for iter := retryStrategy.Start(); ; {
 		request, err := http.NewRequest("POST", destURL, bytes.NewReader(buf.Bytes()))
@@ -87,9 +88,7 @@ func SOAPCallWithHeaderClient(ctx context.Context,
 		request.Header.Set("Content-Type", "text/xml; charset=utf-8")
 		request.Header.Set("SOAPAction", action)
 		request.Header.Set("Length", strconv.Itoa(buf.Len()))
-		if Log != nil {
-			Log("POST", destURL, "header", request.Header, "xml", buf.String())
-		}
+		logger.Info("request", "POST", destURL, "header", request.Header, "xml", buf.String())
 
 		if response, err = client.Do(request); err == nil {
 			break
@@ -113,12 +112,12 @@ func SOAPCallWithHeaderClient(ctx context.Context,
 		return err
 	}
 	err = dec.DecodeElement(resp, &st)
-	if Log == nil {
+	if !logger.V(1).Enabled() {
 		return err
 	}
 	if err != nil {
 		io.Copy(ioutil.Discard, tr)
-		Log("msg", "response", buf.String(), "decoded", resp, "error", err)
+		logger.V(1).Info("response", buf.String(), "decoded", resp, "error", err)
 		return err
 	}
 	respLen := buf.Len()
@@ -126,7 +125,7 @@ func SOAPCallWithHeaderClient(ctx context.Context,
 	buf.Reset()
 	fmt.Fprintf(buf, "%#v", resp)
 	decHead, decTail := splitHeadTail(buf.Bytes(), 512)
-	Log("msg", "response", "resp-length", respLen,
+	logger.Info("response", "resp-length", respLen,
 		"resp-head", respHead, "resp-tail", respTail,
 		"decoded-length", buf.Len(), "decoded-head", decHead, "decoded-tail", decTail)
 	return nil
@@ -136,14 +135,13 @@ func SOAPCallWithHeaderClient(ctx context.Context,
 func SOAPCallWithHeader(ctx context.Context,
 	destURL string, customize func(req *http.Request),
 	action, soapHeader, reqBody string, resp interface{},
-	Log func(...interface{}) error,
 ) error {
-	return SOAPCallWithHeaderClient(ctx, nil, destURL, customize, action, soapHeader, reqBody, resp, Log)
+	return SOAPCallWithHeaderClient(ctx, nil, destURL, customize, action, soapHeader, reqBody, resp)
 }
 
 // SOAPCall destURL with SOAPAction=action, decoding the response body into resp.
-func SOAPCall(ctx context.Context, destURL, action string, reqBody string, resp interface{}, Log func(...interface{}) error) error {
-	return SOAPCallWithHeader(ctx, destURL, nil, action, "", reqBody, resp, Log)
+func SOAPCall(ctx context.Context, destURL, action string, reqBody string, resp interface{}) error {
+	return SOAPCallWithHeader(ctx, destURL, nil, action, "", reqBody, resp)
 }
 
 func splitHeadTail(b []byte, length int) (head string, tail string) {
