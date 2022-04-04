@@ -1,4 +1,4 @@
-// Copyright 2019, 2020 Tamás Gulácsi
+// Copyright 2019, 2022 Tamás Gulácsi
 //
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/UNO-SOFT/grpcer"
+	"github.com/go-logr/logr/testr"
 	"github.com/tgulacsi/oracall/custom"
 	"google.golang.org/grpc"
 )
@@ -153,14 +154,7 @@ func (n nullClient) Call(name string, ctx context.Context, input interface{}, op
 func TestDecodeRequest(t *testing.T) {
 	h := SOAPHandler{
 		Client: nullClient{},
-		Log: func(keyvals ...interface{}) error {
-			var buf strings.Builder
-			for i := 0; i < len(keyvals); i += 2 {
-				fmt.Fprintf(&buf, "%s=%+v ", keyvals[i], keyvals[i+1])
-			}
-			t.Log(buf.String())
-			return nil
-		},
+		Logger: testr.New(t),
 
 		DecodeHeader: func(ctx context.Context, dec *xml.Decoder, st *xml.StartElement) (context.Context, func(context.Context, io.Writer, error) error, error) {
 			var hdr struct {

@@ -37,6 +37,8 @@ import (
 	"sync"
 
 	"github.com/UNO-SOFT/grpcer"
+	"github.com/go-logr/logr"
+
 	//"github.com/UNO-SOFT/otel"
 
 	"golang.org/x/net/html/charset"
@@ -53,7 +55,7 @@ const textXML = "text/xml; charset=utf-8"
 // WSDL is served on GET requests.
 type SOAPHandler struct {
 	grpcer.Client
-	Log               func(keyvals ...interface{}) error
+	logr.Logger
 	annotations       map[string]Annotation
 	DecodeInput       func(*string, *xml.Decoder, *xml.StartElement) (interface{}, error)
 	EncodeOutput      func(*xml.Encoder, interface{}) error
@@ -85,22 +87,22 @@ func (h *SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	//ctx := otel.ExtractHTTP(r.Context(), r.Header)
 	ctx := r.Context()
-	Log := h.Log
-	if logger, ok := ctx.Value("logger").(interface {
-		Log(...interface{}) error
-	}); ok {
-		Log = logger.Log
+	logger := h.Logger
+	if lgr, err := logr.FromContext(ctx); err == nil {
+		logger = lgr
+	} else {
+		ctx = logr.NewContext(ctx, logger)
 	}
 	if r.Method == "GET" {
 		w.Header().Set("Content-Type", textXML)
 		io.WriteString(w, h.getWSDL())
 		return
 	}
-	mayFilterEmptyTags(r, Log)
+	mayFilterEmptyTags(r, logger)
 
 	rI, inp, err := h.DecodeRequest(ctx, r)
 	if err != nil {
-		Log("msg", "decode", "into", fmt.Sprintf("%T", inp), "error", err)
+		logger.Error(err, "decode", "into", fmt.Sprintf("%T", inp))
 		if errors.Is(err, errDecode) {
 			soapError(w, err)
 		} else {
@@ -115,7 +117,7 @@ func (h *SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	buf.Reset()
 	jenc := json.NewEncoder(buf)
 	_ = jenc.Encode(inp)
-	Log("msg", "Calling", "soapAction", request.Action, "inp", buf.String())
+	logger.Info("Calling", "soapAction", request.Action, "inp", buf.String())
 
 	var opts []grpc.CallOption
 	if u, p, ok := r.BasicAuth(); ok {
@@ -134,12 +136,12 @@ func (h *SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	recv, err := h.Call(request.Action, ctx, inp, opts...)
 	if err != nil {
-		Log("call", request.Action, "inp", fmt.Sprintf("%+v", inp), "error", err)
+		logger.Error(err, "call", request.Action, "inp", fmt.Sprintf("%+v", inp))
 		soapError(w, err)
 		return
 	}
 
-	h.encodeResponse(ctx, w, recv, request, Log)
+	h.encodeResponse(ctx, w, recv, request)
 }
 
 type requestInfo struct {
@@ -164,20 +166,21 @@ const (
 </SOAP-ENV:Body></SOAP-ENV:Envelope>`
 )
 
-func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter, recv grpcer.Receiver, request requestInfo, Log func(...interface{}) error) {
+func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter, recv grpcer.Receiver, request requestInfo) {
+	logger := h.getLogger(ctx)
 	w.Header().Set("Content-Type", textXML)
 	io.WriteString(w, soapEnvelopeHeader)
 
 	part, recvErr := recv.Recv()
 	next, nextErr := recv.Recv()
-	Log("msg", "encodeResponse", "recvErr", recvErr, "nextErr", nextErr)
+	logger.Info("encodeResponse", "recvErr", recvErr, "nextErr", nextErr)
 
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
 	if request.EncodeHeader != nil {
 		buf.Reset()
 		if hdrErr := request.EncodeHeader(ctx, buf, recvErr); hdrErr != nil {
-			Log("EncodeHeader", hdrErr)
+			logger.Error(hdrErr, "EncodeHeader")
 		} else {
 			io.WriteString(w, "<SOAP-ENV:Header>\n")
 			w.Write(buf.Bytes())
@@ -188,7 +191,7 @@ func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter,
 	defer func() { io.WriteString(w, soapEnvelopeFooter) }()
 
 	if recvErr != nil {
-		Log("recv-error", recvErr)
+		logger.Error(recvErr, "recv-error")
 		encodeSoapFault(w, recvErr)
 		return
 	}
@@ -199,7 +202,7 @@ func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter,
 	if shouldMerge {
 		slice, notSlice = grpcer.SliceFields(part, "xml")
 	}
-	Log("shouldMerge", shouldMerge, "slice", slice)
+	logger.Info("mayMerge", "shouldMerge", shouldMerge, "slice", slice)
 	if len(slice) == 0 {
 		// Nothing to merge
 		mw := io.MultiWriter(w, buf)
@@ -235,15 +238,15 @@ func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter,
 			} else {
 				err = enc.Encode(part)
 			}
-			Log("recv-xml", buf.String())
+			logger.V(1).Info("found", "recv-xml", buf.String())
 			if err != nil {
-				Log("msg", "encode", "error", err, "part", part)
+				logger.Error(err, "encode", "part", part)
 				break
 			}
 			w.Write([]byte{'\n'})
 			if part, err = recv.Recv(); err != nil {
 				if err != io.EOF {
-					Log("msg", "recv", "error", err)
+					logger.Error(err, "recv")
 				}
 				break
 			}
@@ -273,7 +276,6 @@ func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter,
 				tp = tp.Elem()
 			}
 			rv := reflect.New(tp).Elem()
-			//Log("tp", tp, "rv", rv, "kid", rv.Kind())
 			for _, f := range notSlice {
 				rv.FieldByName(f.Name).Set(reflect.ValueOf(f.Value))
 			}
@@ -292,17 +294,17 @@ func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter,
 				err = enc.Encode(rv.Interface())
 			}
 			if err != nil {
-				Log("msg", "encode zero", "value", rv.Interface(), "error", err)
+				logger.Error(err, "encode zero", "value", rv.Interface())
 				break
 			}
 			b := buf.Bytes()
 			_, end, ok := findOuterTag(b)
 			if !ok {
-				Log("msg", "no findOuterTag", "b", string(b))
+				logger.Info("no findOuterTag", "b", string(b))
 				break
 			}
 			if _, err = w.Write(b[:end[0]]); err != nil {
-				Log("msg", "write", "error", err)
+				logger.Error(err, "write")
 				break
 			}
 			w.Write([]byte{'\n'})
@@ -321,7 +323,7 @@ func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter,
 				continue
 			}
 			if err := ss.Encode(f.Name, rf.Interface()); err != nil {
-				Log("msg", "encodeSliceField", "field", f.Name, "error", err)
+				logger.Error(err, "encodeSliceField", "field", f.Name)
 				break
 			}
 		}
@@ -333,7 +335,7 @@ func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter,
 		}
 		if err != nil {
 			if err != io.EOF {
-				Log("msg", "recv", "error", err)
+				logger.Error(err, "recv")
 			}
 			break
 		}
@@ -351,17 +353,17 @@ func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter,
 		}
 	}
 
-	Log("msg", "copy", "files", ss.files)
+	logger.Info("copy", "files", ss.files)
 	for _, nm := range fieldOrder {
 		rc, err := ss.files[nm].GetReader()
 		if err != nil {
-			Log("msg", "GetReader", "file", nm, "error", err)
+			logger.Error(err, "GetReader", "file", nm)
 			continue
 		}
 		_, err = io.Copy(w, rc)
 		rc.Close()
 		if err != nil {
-			Log("msg", "copy", "file", nm, "error", err)
+			logger.Error(err, "copy", "file", nm)
 		}
 	}
 }
@@ -407,6 +409,7 @@ var (
 )
 
 func (h *SOAPHandler) DecodeRequest(ctx context.Context, r *http.Request) (grpcer.RequestInfo, interface{}, error) {
+	logger := h.getLogger(ctx)
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
 	buf.Reset()
@@ -422,10 +425,10 @@ func (h *SOAPHandler) DecodeRequest(ctx context.Context, r *http.Request) (grpce
 		hDec := newXMLDecoder(bytes.NewReader(buf.Bytes()))
 		hSt, err := findSoapElt("header", hDec)
 		if err != nil {
-			h.Log("findSoapHeader", err)
+			logger.Error(err, "findSoapHeader")
 		} else {
 			if _, request.EncodeHeader, err = h.DecodeHeader(ctx, hDec, &hSt); err != nil {
-				h.Log("DecodeHeader", err, "header", buf.String())
+				logger.Error(err, "DecodeHeader", "header", buf.String())
 				return request, nil, fmt.Errorf("decodeHeader: %w", err)
 			}
 		}
@@ -439,7 +442,7 @@ func (h *SOAPHandler) DecodeRequest(ctx context.Context, r *http.Request) (grpce
 		request.Action = request.Action[i+1:]
 	}
 	request.Annotation = h.annotation(request.Action)
-	h.Log("soapAction", request.Action, "justRawXML", request.Raw)
+	logger.Info("request", "soapAction", request.Action, "justRawXML", request.Raw)
 	if request.Raw {
 		startPos := dec.InputOffset()
 		if err = dec.Skip(); err != nil {
@@ -450,10 +453,10 @@ func (h *SOAPHandler) DecodeRequest(ctx context.Context, r *http.Request) (grpce
 
 		rawXML := string(b)
 		rawXML = request.TrimInput(rawXML)
-		h.Log("prefix", request.Prefix, "postfix", request.Postfix)
+		logger.Info("raw", "prefix", request.Prefix, "postfix", request.Postfix)
 
 		inp := h.Input(request.Action)
-		h.Log("rawXML", rawXML, "inp", fmt.Sprintf("%#v", inp), "T", fmt.Sprintf("%T", inp))
+		logger.Info("raw", "rawXML", rawXML, "inp", fmt.Sprintf("%#v", inp), "T", fmt.Sprintf("%T", inp))
 		rv := reflect.ValueOf(inp).Elem()
 		rt := rv.Type()
 		for i := 0; i < rt.NumField(); i++ {
@@ -497,10 +500,10 @@ func (h *SOAPHandler) DecodeRequest(ctx context.Context, r *http.Request) (grpce
 			if t := reflect.TypeOf(inp).Elem(); t.Kind() == reflect.Struct && t.NumField() == 0 {
 				return request, inp, nil
 			} else {
-				h.Log("inp", fmt.Sprintf("%T", inp))
+				logger.Info("EOF", "inp", fmt.Sprintf("%T", inp))
 			}
 		} else {
-			h.Log("ERROR", err)
+			logger.Error(err, "ERROR")
 		}
 
 		err = fmt.Errorf("into %T: %v\n%s: %w", inp, err, buf.String(), errDecode)
@@ -535,10 +538,7 @@ func (h *SOAPHandler) getWSDL() string {
 
 func (h *SOAPHandler) annotation(soapAction string) (annotation Annotation) {
 	defer func() {
-		if h == nil || h.Log == nil {
-			return
-		}
-		h.Log("soapAction", soapAction, "annotation", annotation)
+		h.Info("annotations ends", "soapAction", soapAction, "annotation", annotation)
 	}()
 
 	get := func(soapAction string) Annotation {
@@ -564,7 +564,6 @@ func (h *SOAPHandler) annotation(soapAction string) (annotation Annotation) {
 		if err != nil {
 			break
 		}
-		//h.Log("tok", fmt.Sprintf("%T:%+v", tok, tok))
 		switch x := tok.(type) {
 		case xml.StartElement:
 			if x.Name.Local == "any" && (x.Name.Space == "" || x.Name.Space == "http://www.w3.org/2001/XMLSchema") {
@@ -583,7 +582,7 @@ func (h *SOAPHandler) annotation(soapAction string) (annotation Annotation) {
 				if bytes.HasPrefix(x, []byte{'{'}) {
 					m := make(map[string]Annotation)
 					if err = json.NewDecoder(bytes.NewReader(x)).Decode(&m); err != nil {
-						h.Log("msg", "parse", "documentation", string(x), "error", err)
+						h.Error(err, "parse", "documentation", string(x))
 					} else {
 						if h.annotations == nil {
 							h.annotations = m
@@ -612,7 +611,7 @@ func (h *SOAPHandler) annotation(soapAction string) (annotation Annotation) {
 	return get(soapAction)
 }
 
-func mayFilterEmptyTags(r *http.Request, Log func(...interface{}) error) {
+func mayFilterEmptyTags(r *http.Request, logger logr.Logger) {
 	if !(r.Header.Get("Keep-Empty-Tags") == "1" || r.URL.Query().Get("keepEmptyTags") == "1") {
 		//data = rEmptyTag.ReplaceAll(data, nil)
 		save := bufPool.Get().(*bytes.Buffer)
@@ -622,9 +621,7 @@ func mayFilterEmptyTags(r *http.Request, Log func(...interface{}) error) {
 		defer bufPool.Put(buf)
 		buf.Reset()
 		if err := FilterEmptyTags(buf, io.TeeReader(r.Body, save)); err != nil {
-			if Log != nil {
-				Log("FilterEmptyTags", save.String(), "error", err)
-			}
+			logger.Info("FilterEmptyTags", save.String(), "error", err)
 			r.Body = struct {
 				io.Reader
 				io.Closer
@@ -923,6 +920,16 @@ func findOuterTag(b []byte) (start, end [2]int, ok bool) {
 	}
 	end[0], end[1] = off+j, off+j+2+len(tag)+1
 	return start, end, true
+}
+
+func (h *SOAPHandler) getLogger(ctx context.Context) logr.Logger {
+	if lgr, err := logr.FromContext(ctx); err == nil {
+		return lgr
+	}
+	if h == nil {
+		return logr.Discard()
+	}
+	return h.Logger
 }
 
 // vim: set fileencoding=utf-8 noet:
