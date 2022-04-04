@@ -56,6 +56,8 @@ github.com/UNO-SOFT/grpcer v0.8.1-0.20220404102043-10f43a020e60 h1:YgMtdKKdYWLO+
 github.com/UNO-SOFT/grpcer v0.8.1-0.20220404102043-10f43a020e60/go.mod h1:seSIucKtBtcnyJTiJfgBs8ITTy7r4tJhLbH8dW1h3Vw=
 github.com/UNO-SOFT/grpcer v0.8.1-0.20220404102702-133cf0493aa2 h1:pKeE34+VlEdIMNUIV/7vcOTOaEjrHK7Awb7/0dsHwu0=
 github.com/UNO-SOFT/grpcer v0.8.1-0.20220404102702-133cf0493aa2/go.mod h1:seSIucKtBtcnyJTiJfgBs8ITTy7r4tJhLbH8dW1h3Vw=
+github.com/UNO-SOFT/grpcer v0.8.1 h1:GRll8rNGPRgDOLmKLvsNwLrEvodRWMJLAf4yLhQO7GM=
+github.com/UNO-SOFT/grpcer v0.8.1/go.mod h1:seSIucKtBtcnyJTiJfgBs8ITTy7r4tJhLbH8dW1h3Vw=
 github.com/UNO-SOFT/otel v0.2.0 h1:ZyuauBax+lX4M5+PVc6psJgoI70t60XQSBUAkUUCNZg=
 github.com/UNO-SOFT/otel v0.2.0/go.mod h1:smguG32FWkp9cKsLc++36X3bt7vAkjmV6GL2AuKZQKY=
 github.com/UNO-SOFT/ulog v1.3.1/go.mod h1:x14kTiR+nTWQtoeaGaOwK+oLKCde/ajXVIsgV204fkI=
@@ -180,6 +182,7 @@ github.com/facebookgo/subset v0.0.0-20150612182917-8dac2c3c4870/go.mod h1:5tD+ne
 github.com/fatih/color v1.7.0/go.mod h1:Zm6kSWBoL9eyXnKyktHP6abPY2pDugNf5KwzbycvMj4=
 github.com/fatih/color v1.9.0/go.mod h1:eQcE1qtQxscV5RaZvpXrrb8Drkc3/DdQ+uUYCNjL+zU=
 github.com/fatih/color v1.12.0/go.mod h1:ELkj/draVOlAH/xkhN6mQ50Qd0MPOk5AAr3maGEBuJM=
+github.com/fatih/structs v1.1.0 h1:Q7juDM0QtcnhCpeyLGQKyg4TOIghuNXrkL32pHAUMxo=
 github.com/fatih/structs v1.1.0/go.mod h1:9NiDSp5zOcgEDl+j00MP/WkGVPOlPRLejGD8Ga6PJ7M=
 github.com/fogleman/gg v1.2.1-0.20190220221249-0403632d5b90/go.mod h1:R/bRT+9gY/C5z7JzPU0zXsXHKM4/ayA+zqcVNZzPa1k=
 github.com/franela/goblin v0.0.0-20200105215937-c9ffbefa60db/go.mod h1:7dvUGVsVBjqR7JHJk0brhHOZYGmfBYOrK0ZhYMEtBr4=
@@ -216,6 +219,8 @@ github.com/go-logr/logr v1.2.3/go.mod h1:jdQByPbusPIv2/zmleS9BjJVeZ6kBagPoEUsqbV
 github.com/go-logr/stdr v1.2.0/go.mod h1:YkVgnZu1ZjjL7xTxrfm/LLZBfkhTqSR1ydtm6jTKKwI=
 github.com/go-logr/stdr v1.2.2 h1:hSWxHoqTgW2S2qGc0LTAI563KZ5YKYRhT3MFKZMbjag=
 github.com/go-logr/stdr v1.2.2/go.mod h1:mMo/vtBO5dYbehREoey6XUKy/eSumjCCveDpRre4VKE=
+github.com/go-logr/zerologr v1.2.1 h1:ueMQwFM9oKfjZzeooSNz7AeXvz82gsjdQwXMh+5UtYo=
+github.com/go-logr/zerologr v1.2.1/go.mod h1:O82obOiXzyxiBNgAMRT1m+XbOvY8K18Kf6XhT52oqoc=
 github.com/go-sql-driver/mysql v1.4.0/go.mod h1:zAC/RDZ24gD3HViQzih4MyKcchzm+sOG5ZlKdlhCg5w=
 github.com/go-sql-driver/mysql v1.4.1-0.20180719071942-99ff426eb706/go.mod h1:zAC/RDZ24gD3HViQzih4MyKcchzm+sOG5ZlKdlhCg5w=
 github.com/go-stack/stack v1.8.0/go.mod h1:v0f6uXyyMGvRgIKkXu+yp6POWl0qKG85gN/melR3HDY=
@@ -226,6 +231,8 @@ github.com/godbus/dbus/v5 v5.0.4/go.mod h1:xhWf0FNVPg57R7Z0UbKHbJfkEywrmjJnf7w5x
 github.com/godror/godror v0.24.2/go.mod h1:wZv/9vPiUib6tkoDl+AZ/QLf5YZgMravZ7jxH2eQWAE=
 github.com/godror/godror v0.30.0 h1:1NEhy4AkmMr6MM5478luTa8q1O4Msz8whqND8SNRRcI=
 github.com/godror/godror v0.30.0/go.mod h1:aWbwHSee9mdUziQGnwuu3jfvVF+g08/r3hMbsAAba7I=
+github.com/godror/godror v0.32.1-0.20220331041914-c27154e922fa h1:gYDn3XZp8lRDqgPeWwR4EH3lZ40NMnXhEnNWzMd60vw=
+github.com/godror/godror v0.32.1-0.20220331041914-c27154e922fa/go.mod h1:qHYnDISFm/h0vM+HDwg0LpyoLvxRKFRSwvhYF7ufjZ8=
 github.com/godror/knownpb v0.1.0 h1:dJPK8s/I3PQzGGaGcUStL2zIaaICNzKKAK8BzP1uLio=
 github.com/godror/knownpb v0.1.0/go.mod h1:4nRFbQo1dDuwKnblRXDxrfCFYeT4hjg3GjMqef58eRE=
 github.com/gogo/googleapis v1.1.0/go.mod h1:gf4bu3Q80BeJ6H1S1vYPm8/ELATdvryBaNFGgqEef3s=
@@ -578,7 +585,10 @@ github.com/rogpeppe/go-internal v1.6.1/go.mod h1:xXDCJY+GAPziupqXw64V24skbSoqbTE
 github.com/rogpeppe/retry v0.1.0 h1:6km4oqeZcFrnhx+PCPg/YxV3fnTdROBNVlSl8Pe/ztU=
 github.com/rogpeppe/retry v0.1.0/go.mod h1:/PtRtl9qXn+Pv5S4wN+Y5nusihQeI1PJ9U7KDcKzuvI=
 github.com/rs/xid v1.2.1/go.mod h1:+uKXf+4Djp6Md1KODXJxgGQPKngRmWyn10oCKFzNHOQ=
+github.com/rs/xid v1.3.0/go.mod h1:trrq9SKmegXys3aeAKXMUTdJsYXVwGY3RLcfgqegfbg=
 github.com/rs/zerolog v1.21.0/go.mod h1:ZPhntP/xmq1nnND05hhpAh2QMhSsA4UN3MGZ6O2J3hM=
+github.com/rs/zerolog v1.25.0 h1:Rj7XygbUHKUlDPcVdoLyR91fJBsduXj5fRxyqIQj/II=
+github.com/rs/zerolog v1.25.0/go.mod h1:7KHcEGe0QZPOm2IE4Kpb5rTh6n1h2hIgS5OOnu1rUaI=
 github.com/russross/blackfriday v1.5.2/go.mod h1:JO/DiYxRf+HjHt06OyowR9PTA263kcR/rfWxYHBV53g=
 github.com/russross/blackfriday v2.0.0+incompatible/go.mod h1:JO/DiYxRf+HjHt06OyowR9PTA263kcR/rfWxYHBV53g=
 github.com/russross/blackfriday/v2 v2.0.1/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
@@ -637,6 +647,8 @@ github.com/tgulacsi/go-xmlrpc v0.2.2/go.mod h1:djD/1/4V1SxuNzjymfqj38hkzF3OvIX/a
 github.com/tgulacsi/oracall v0.19.0/go.mod h1:/JrIwIRwrbFaF2fuU3QeTLP5Ku6+zID6IJrd/o2RF8Q=
 github.com/tgulacsi/oracall v0.22.1 h1:X6rQHX1CxY0KrNGka69YY3nAYR6s2fHaa9xlVOOklcs=
 github.com/tgulacsi/oracall v0.22.1/go.mod h1:7yE35A406Rva/u3BA4PXzo1uQ9d5rYcsZu47JT+BVJ8=
+github.com/tgulacsi/oracall v0.23.0 h1:ZGD23CVPP6eSje5X8kAmZQSmf0/wsQ0xSEmve3w0eDs=
+github.com/tgulacsi/oracall v0.23.0/go.mod h1:652q6N8KcfRDn501sd7eX26HjGPs9JVK15/Q9MhFR1M=
 github.com/tgulacsi/picago v0.0.0-20171229130838-9e1ac2306c70/go.mod h1:YOW4MCz1GRh0aqedyC48A1CRXSHngOB/O/4+1rUjDQg=
 github.com/tmc/grpc-websocket-proxy v0.0.0-20170815181823-89b8d40f7ca8/go.mod h1:ncp9v5uamzpCO7NfCPTXjqaC+bZgJeR0sMTm6dMHP7U=
 github.com/tomnomnom/linkheader v0.0.0-20180905144013-02ca5825eb80/go.mod h1:iFyPdL66DjUD96XmzVL3ZntbzcflLnznH0fr99w5VqE=
