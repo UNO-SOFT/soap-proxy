@@ -4,7 +4,7 @@ go 1.15
 
 require (
 	aqwari.net/xml v0.0.0-20181013063537-841f47b2a098
-	github.com/UNO-SOFT/grpcer v0.8.1-0.20220404102043-10f43a020e60
+	github.com/UNO-SOFT/grpcer v0.8.1-0.20220404102702-133cf0493aa2
 	github.com/go-logr/logr v1.2.3
 	github.com/klauspost/compress v1.15.1 // indirect
 	github.com/mitchellh/mapstructure v1.4.3 // indirect

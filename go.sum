@@ -54,6 +54,8 @@ github.com/UNO-SOFT/grpcer v0.8.0 h1:/jsfybrJKewigCWTOkTzijwPCgEubbDcDzhAoiB847E
 github.com/UNO-SOFT/grpcer v0.8.0/go.mod h1:seSIucKtBtcnyJTiJfgBs8ITTy7r4tJhLbH8dW1h3Vw=
 github.com/UNO-SOFT/grpcer v0.8.1-0.20220404102043-10f43a020e60 h1:YgMtdKKdYWLO+iHbsAcUv17pTk9BGyFn4UMsmI5rwTA=
 github.com/UNO-SOFT/grpcer v0.8.1-0.20220404102043-10f43a020e60/go.mod h1:seSIucKtBtcnyJTiJfgBs8ITTy7r4tJhLbH8dW1h3Vw=
+github.com/UNO-SOFT/grpcer v0.8.1-0.20220404102702-133cf0493aa2 h1:pKeE34+VlEdIMNUIV/7vcOTOaEjrHK7Awb7/0dsHwu0=
+github.com/UNO-SOFT/grpcer v0.8.1-0.20220404102702-133cf0493aa2/go.mod h1:seSIucKtBtcnyJTiJfgBs8ITTy7r4tJhLbH8dW1h3Vw=
 github.com/UNO-SOFT/otel v0.2.0 h1:ZyuauBax+lX4M5+PVc6psJgoI70t60XQSBUAkUUCNZg=
 github.com/UNO-SOFT/otel v0.2.0/go.mod h1:smguG32FWkp9cKsLc++36X3bt7vAkjmV6GL2AuKZQKY=
 github.com/UNO-SOFT/ulog v1.3.1/go.mod h1:x14kTiR+nTWQtoeaGaOwK+oLKCde/ajXVIsgV204fkI=
