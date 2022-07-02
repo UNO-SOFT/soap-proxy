@@ -49,6 +49,8 @@ github.com/Shopify/sarama v1.19.0/go.mod h1:FVkBWblsNy7DGZRfXLU0O9RCGt5g3g3yEuWX
 github.com/Shopify/toxiproxy v2.1.4+incompatible/go.mod h1:OXgGpZ6Cli1/URJOF1DMxUHB2q5Ap20/P/eIdh4G0pI=
 github.com/UNO-SOFT/grpcer v0.8.2 h1:oq5mtsEWfufS4zbvzeXCiwbw1tgKrWYtyKj+/QKOxX0=
 github.com/UNO-SOFT/grpcer v0.8.2/go.mod h1:kp2Nbq+JMRyYscwbVTpqrs+LC/LFTWvgo7XXqXHp+Z8=
+github.com/UNO-SOFT/grpcer v0.8.3 h1:s7QoPd/7pvWq2rpE/1pjpOY+oc5C0Z3Mux/ngLSzllI=
+github.com/UNO-SOFT/grpcer v0.8.3/go.mod h1:JeudhAdooGykMvqa9BxBGwnjztZZq4p/vt+jYz6x8UA=
 github.com/UNO-SOFT/otel v0.3.1 h1:CBXxVl3cn9LNM64ZW+dcFymeA9gLSnkUgtef078reQ8=
 github.com/UNO-SOFT/otel v0.3.1/go.mod h1:zPxjt3KB/fU577qbEKlEIJOqsfHTVz+vjSQjR9BACrc=
 github.com/VividCortex/gohistogram v1.0.0/go.mod h1:Pf5mBqqDxYaXu3hDrrU+w6nw50o/4+TcAqDqk/vUH7g=
