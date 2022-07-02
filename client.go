@@ -76,6 +76,8 @@ func SOAPCallWithHeaderClient(ctx context.Context,
 	}
 	logger := logr.FromContextOrDiscard(ctx)
 	var response *http.Response
+	var dur time.Duration
+	var tryCount int
 	for iter := retryStrategy.Start(); ; {
 		request, err := http.NewRequest("POST", destURL, bytes.NewReader(buf.Bytes()))
 		if err != nil {
@@ -90,7 +92,11 @@ func SOAPCallWithHeaderClient(ctx context.Context,
 		request.Header.Set("Length", strconv.Itoa(buf.Len()))
 		logger.Info("request", "POST", destURL, "header", request.Header, "xml", buf.String())
 
-		if response, err = client.Do(request); err == nil {
+		tryCount++
+		start := time.Now()
+		response, err = client.Do(request)
+		dur = time.Since(start)
+		if err == nil {
 			break
 		}
 		if !iter.Next(ctx.Done()) {
@@ -127,7 +133,9 @@ func SOAPCallWithHeaderClient(ctx context.Context,
 	decHead, decTail := splitHeadTail(buf.Bytes(), 512)
 	logger.Info("response", "resp-length", respLen,
 		"resp-head", respHead, "resp-tail", respTail,
-		"decoded-length", buf.Len(), "decoded-head", decHead, "decoded-tail", decTail)
+		"decoded-length", buf.Len(), "decoded-head", decHead, "decoded-tail", decTail,
+		"dur", dur.String(), "try-count", tryCount,
+	)
 	return nil
 }
 
