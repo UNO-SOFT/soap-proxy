@@ -21,9 +21,9 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -36,7 +36,7 @@ import (
 )
 
 func TestRawXML(t *testing.T) {
-	b, err := ioutil.ReadFile(filepath.Join("testdata", "withAny.wsdl"))
+	b, err := os.ReadFile(filepath.Join("testdata", "withAny.wsdl"))
 	if err != nil {
 		t.Fatal(err)
 	}

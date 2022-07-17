@@ -25,7 +25,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"reflect"
@@ -753,7 +752,7 @@ func Ungzb64(s string) string {
 	if err != nil {
 		panic(err)
 	}
-	b, err := ioutil.ReadAll(gr)
+	b, err := io.ReadAll(gr)
 	if err != nil {
 		panic(err)
 	}

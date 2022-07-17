@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"strconv"
 	"time"
@@ -122,7 +121,7 @@ func SOAPCallWithHeaderClient(ctx context.Context,
 		return err
 	}
 	if err != nil {
-		io.Copy(ioutil.Discard, tr)
+		io.Copy(io.Discard, tr)
 		logger.V(1).Info("response", buf.String(), "decoded", resp, "error", err)
 		return err
 	}
