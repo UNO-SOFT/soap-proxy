@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/klauspost/compress/gzhttp"
 	"github.com/rogpeppe/retry"
 )
 
@@ -67,6 +68,7 @@ func SOAPCallWithHeaderClient(ctx context.Context,
 	if client == nil {
 		client = http.DefaultClient
 	}
+	client.Transport = gzhttp.Transport(client.Transport)
 	retryStrategy := retryStrategy
 	if dl, ok := ctx.Deadline(); ok {
 		if d := time.Until(dl); d > time.Second {
