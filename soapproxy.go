@@ -37,6 +37,7 @@ import (
 
 	"github.com/UNO-SOFT/grpcer"
 	"github.com/go-logr/logr"
+	"github.com/klauspost/compress/gzhttp"
 
 	//"github.com/UNO-SOFT/otel"
 
@@ -83,6 +84,9 @@ func (h *SOAPHandler) Input(name string) interface{} {
 var bufPool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]byte, 0, 1024)) }}
 
 func (h *SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	gzhttp.GzipHandler(http.HandlerFunc(h.serveHTTP)).ServeHTTP(w, r)
+}
+func (h *SOAPHandler) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	//ctx := otel.ExtractHTTP(r.Context(), r.Header)
 	ctx := r.Context()
