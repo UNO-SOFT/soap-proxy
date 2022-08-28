@@ -4,6 +4,7 @@
 
 package main
 
+// nosemgrep: go.lang.security.audit.xss.import-text-template.import-text-template
 import (
 	"bytes"
 	"compress/gzip"
@@ -601,10 +602,11 @@ func xsdTypeFromDocu(docu string) XSDType {
 	b, e := strings.LastIndexByte(typ, '(')+1, len(typ)-1
 	switch typ[:3] {
 	case "CHA", "VAR":
-		var err error
-		if xt.Prec, err = strconv.Atoi(typ[b:e]); err != nil {
+		prec, err := strconv.Atoi(typ[b:e])
+		if err != nil {
 			panic(fmt.Errorf("%q: %w", typ[b:e], err))
 		}
+		xt.Prec = prec
 		xt.Name = "string_" + typ[b:e]
 		return xt
 
@@ -619,18 +621,21 @@ func xsdTypeFromDocu(docu string) XSDType {
 			i += b
 		}
 		//log.Printf("typ=%q b=%d i=%d e=%d", typ, b, i ,e)
-		var err error
-		if xt.Prec, err = strconv.Atoi(typ[b:i]); err != nil {
+		prec, err := strconv.Atoi(typ[b:i])
+		if err != nil {
 			panic(fmt.Errorf("%q: %w", typ[b:i], err))
 		}
+		xt.Prec = prec
 		if i == e {
 			xt.Name = "decimal_" + typ[b:i]
 			return xt
 		}
 
-		if xt.Scale, err = strconv.Atoi(typ[i+1 : e]); err != nil {
+		scale, err := strconv.Atoi(typ[i+1 : e])
+		if err != nil {
 			panic(fmt.Errorf("%q: %w", typ[i+1:e], err))
 		}
+		xt.Scale = scale
 		xt.Name = fmt.Sprintf("decimal_%d_%d", xt.Prec, xt.Scale)
 		return xt
 	}

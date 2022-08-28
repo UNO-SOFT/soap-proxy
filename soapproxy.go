@@ -97,8 +97,11 @@ func (h *SOAPHandler) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		ctx = logr.NewContext(ctx, logger)
 	}
 	if r.Method == "GET" {
+		body := h.getWSDL()
 		w.Header().Set("Content-Type", textXML)
-		io.WriteString(w, h.getWSDL())
+		w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+		// nosemgrep: go.lang.security.audit.xss.no-io-writestring-to-responsewriter.no-io-writestring-to-responsewriter
+		io.WriteString(w, body)
 		return
 	}
 	mayFilterEmptyTags(r, logger)
@@ -172,6 +175,7 @@ const (
 func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter, recv grpcer.Receiver, request requestInfo) {
 	logger := h.getLogger(ctx)
 	w.Header().Set("Content-Type", textXML)
+	// nosemgrep: go.lang.security.audit.xss.no-io-writestring-to-responsewriter.no-io-writestring-to-responsewriter
 	io.WriteString(w, soapEnvelopeHeader)
 
 	part, recvErr := recv.Recv()
@@ -182,12 +186,14 @@ func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter,
 	defer bufPool.Put(buf)
 	if request.EncodeHeader != nil {
 		buf.Reset()
-		if hdrErr := request.EncodeHeader(ctx, buf, recvErr); hdrErr != nil {
+		buf.WriteString("<SOAP-ENV:Header>\n")
+		hdrErr := request.EncodeHeader(ctx, buf, recvErr)
+		buf.WriteString("</SOAP-ENV:Header>\n")
+		if hdrErr != nil {
 			logger.Error(hdrErr, "EncodeHeader")
 		} else {
-			io.WriteString(w, "<SOAP-ENV:Header>\n")
+			// nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter
 			w.Write(buf.Bytes())
-			io.WriteString(w, "</SOAP-ENV:Header>\n")
 		}
 	}
 	io.WriteString(w, "<SOAP-ENV:Body>\n")
@@ -246,6 +252,7 @@ func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter,
 				logger.Error(err, "encode", "part", part)
 				break
 			}
+			// nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter
 			w.Write([]byte{'\n'})
 			if part, err = recv.Recv(); err != nil {
 				if err != io.EOF {
@@ -280,6 +287,7 @@ func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter,
 			}
 			rv := reflect.New(tp).Elem()
 			for _, f := range notSlice {
+				// nosemgrep: go.lang.security.audit.unsafe-reflect-by-name.unsafe-reflect-by-name
 				rv.FieldByName(f.Name).Set(reflect.ValueOf(f.Value))
 			}
 			buf.Reset()
@@ -306,12 +314,15 @@ func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter,
 				logger.Info("no findOuterTag", "b", string(b))
 				break
 			}
+			// nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter
 			if _, err = w.Write(b[:end[0]]); err != nil {
 				logger.Error(err, "write")
 				break
 			}
+			// nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter
 			w.Write([]byte{'\n'})
 			suffix := string(b[end[0]:end[1]])
+			// nosemgrep: go.lang.security.audit.xss.no-io-writestring-to-responsewriter.no-io-writestring-to-responsewriter
 			defer io.WriteString(w, suffix)
 		}
 
@@ -321,6 +332,7 @@ func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter,
 			rv = rv.Elem()
 		}
 		for _, f := range slice {
+			// nosemgrep: go.lang.security.audit.unsafe-reflect-by-name.unsafe-reflect-by-name
 			rf := rv.FieldByName(f.Name)
 			if rf.IsZero() || rf.Len() == 0 {
 				continue
@@ -430,10 +442,12 @@ func (h *SOAPHandler) DecodeRequest(ctx context.Context, r *http.Request) (grpce
 		if err != nil {
 			logger.Error(err, "findSoapHeader")
 		} else {
-			if _, request.EncodeHeader, err = h.DecodeHeader(ctx, hDec, &hSt); err != nil {
+			_, encHeader, err := h.DecodeHeader(ctx, hDec, &hSt)
+			if err != nil {
 				logger.Error(err, "DecodeHeader", "header", buf.String())
 				return request, nil, fmt.Errorf("decodeHeader: %w", err)
 			}
+			request.EncodeHeader = encHeader
 		}
 	}
 
@@ -688,12 +702,17 @@ func encodeSoapFault(w http.ResponseWriter, err error) error {
 			fault.Code = "SOAP-ENV:Client"
 		}
 	}
+	var buf bytes.Buffer
+	io.WriteString(&buf, soapEnvelopeHeader+`<SOAP-ENV:Body>`)
+	err = xml.NewEncoder(&buf).Encode(fault)
+	io.WriteString(&buf, soapEnvelopeFooter)
+
 	w.Header().Set("Content-Type", textXML)
+	w.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
 	w.WriteHeader(code)
 
-	io.WriteString(w, soapEnvelopeHeader+`<SOAP-ENV:Body>`)
-	err = xml.NewEncoder(w).Encode(fault)
-	io.WriteString(w, soapEnvelopeFooter)
+	// nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter
+	w.Write(buf.Bytes())
 	return err
 }
 
