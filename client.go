@@ -68,6 +68,9 @@ func SOAPCallWithHeaderClient(ctx context.Context,
 	if client == nil {
 		client = http.DefaultClient
 	}
+	if client.Transport == nil {
+		client.Transport = http.DefaultTransport
+	}
 	client.Transport = gzhttp.Transport(client.Transport)
 	retryStrategy := retryStrategy
 	if dl, ok := ctx.Deadline(); ok {
