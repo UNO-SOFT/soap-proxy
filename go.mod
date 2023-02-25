@@ -13,12 +13,9 @@ require (
 	github.com/tgulacsi/oracall v0.24.1
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.34.0 // indirect
 	go.opentelemetry.io/otel/exporters/stdout/stdouttrace v1.9.0 // indirect
-	golang.org/x/net v0.0.0-20220812174116-3211cb980234
+	golang.org/x/net v0.7.0
 	golang.org/x/oauth2 v0.0.0-20210514164344-f6687ab2804c // indirect
-	golang.org/x/sys v0.0.0-20220818161305-2296e01440c6 // indirect
 	golang.org/x/time v0.0.0-20220722155302-e5dcc9cfc0b9 // indirect
-	golang.org/x/tools v0.1.10 // indirect
-	golang.org/x/xerrors v0.0.0-20220517211312-f3a8303e98df // indirect
 	google.golang.org/genproto v0.0.0-20220819174105-e9f053255caa // indirect
 	google.golang.org/grpc v1.48.0
 	google.golang.org/protobuf v1.28.1
