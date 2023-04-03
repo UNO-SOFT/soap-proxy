@@ -1,4 +1,4 @@
-// Copyright 2019, 2022 Tamás Gulácsi
+// Copyright 2019, 2023 Tamás Gulácsi
 //
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
@@ -55,13 +55,13 @@ const textXML = "text/xml; charset=utf-8"
 // WSDL is served on GET requests.
 type SOAPHandler struct {
 	grpcer.Client
-	logr.Logger
-	annotations       map[string]Annotation
-	DecodeInput       func(*string, *xml.Decoder, *xml.StartElement) (interface{}, error)
-	EncodeOutput      func(*xml.Encoder, interface{}) error
-	DecodeHeader      func(context.Context, *xml.Decoder, *xml.StartElement) (context.Context, func(context.Context, io.Writer, error) error, error)
+	logr.Logger       `json:"-"`
+	annotations       map[string]Annotation                                                                                                          `json:"-"`
+	DecodeInput       func(*string, *xml.Decoder, *xml.StartElement) (interface{}, error)                                                            `json:"-"`
+	EncodeOutput      func(*xml.Encoder, interface{}) error                                                                                          `json:"-"`
+	DecodeHeader      func(context.Context, *xml.Decoder, *xml.StartElement) (context.Context, func(context.Context, io.Writer, error) error, error) `json:"-"`
 	WSDL              string
-	wsdlWithLocations string
+	wsdlWithLocations string `json:"-"`
 	Locations         []string
 	Timeout           time.Duration
 }
