@@ -4,14 +4,14 @@ go 1.19
 
 require (
 	aqwari.net/xml v0.0.0-20210331023308-d9421b293817
-	github.com/UNO-SOFT/grpcer v0.8.5
-	github.com/go-logr/logr v1.2.3
+	github.com/UNO-SOFT/grpcer v0.8.7
+	github.com/go-logr/logr v1.2.4
 	github.com/klauspost/compress v1.16.3
 	github.com/rogpeppe/retry v0.1.0
 	github.com/tgulacsi/oracall v0.24.1
 	golang.org/x/net v0.8.0
-	google.golang.org/grpc v1.53.0
-	google.golang.org/protobuf v1.29.0
+	google.golang.org/grpc v1.54.0
+	google.golang.org/protobuf v1.30.0
 )
 
 require (
@@ -36,7 +36,7 @@ require (
 	golang.org/x/text v0.8.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/tools v0.6.0 // indirect
-	google.golang.org/genproto v0.0.0-20230306155012-7f2fa6fef1f4 // indirect
+	google.golang.org/genproto v0.0.0-20230331144136-dcfb400f0633 // indirect
 )
 
 //replace github.com/UNO-SOFT/grpcer => ../grpcer

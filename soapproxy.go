@@ -54,7 +54,7 @@ const textXML = "text/xml; charset=utf-8"
 // SOAPHandler is a http.Handler which proxies SOAP requests to the Client.
 // WSDL is served on GET requests.
 type SOAPHandler struct {
-	grpcer.Client
+	grpcer.Client     `json:"-"`
 	logr.Logger       `json:"-"`
 	annotations       map[string]Annotation                                                                                                          `json:"-"`
 	DecodeInput       func(*string, *xml.Decoder, *xml.StartElement) (interface{}, error)                                                            `json:"-"`
