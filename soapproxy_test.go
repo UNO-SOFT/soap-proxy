@@ -30,7 +30,7 @@ import (
 	"time"
 
 	"github.com/UNO-SOFT/grpcer"
-	"github.com/go-logr/logr/testr"
+	"github.com/UNO-SOFT/zlog/v2"
 	"github.com/tgulacsi/oracall/custom"
 	"google.golang.org/grpc"
 )
@@ -154,7 +154,7 @@ func (n nullClient) Call(name string, ctx context.Context, input interface{}, op
 func TestDecodeRequest(t *testing.T) {
 	h := SOAPHandler{
 		Client: nullClient{},
-		Logger: testr.New(t),
+		Logger: zlog.NewT(t).SLog(),
 
 		DecodeHeader: func(ctx context.Context, dec *xml.Decoder, st *xml.StartElement) (context.Context, func(context.Context, io.Writer, error) error, error) {
 			var hdr struct {

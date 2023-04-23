@@ -26,9 +26,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/go-logr/logr"
 	"github.com/klauspost/compress/gzhttp"
 	"github.com/rogpeppe/retry"
+	"golang.org/x/exp/slog"
 )
 
 var (
@@ -53,6 +53,7 @@ func SOAPCallWithHeaderClient(ctx context.Context,
 	client *http.Client,
 	destURL string, customize func(req *http.Request),
 	action, soapHeader, reqBody string, resp interface{},
+	logger *slog.Logger,
 ) error {
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer func() {
@@ -78,7 +79,6 @@ func SOAPCallWithHeaderClient(ctx context.Context,
 			retryStrategy.MaxDuration = d
 		}
 	}
-	logger := logr.FromContextOrDiscard(ctx)
 	var response *http.Response
 	var dur time.Duration
 	var tryCount int
@@ -122,12 +122,12 @@ func SOAPCallWithHeaderClient(ctx context.Context,
 		return err
 	}
 	err = dec.DecodeElement(resp, &st)
-	if !logger.V(1).Enabled() {
+	if !logger.Enabled(ctx, slog.LevelDebug) {
 		return err
 	}
 	if err != nil {
 		io.Copy(io.Discard, tr)
-		logger.V(1).Info("response", buf.String(), "decoded", resp, "error", err)
+		logger.Debug("response", buf.String(), "decoded", resp, "error", err)
 		return err
 	}
 	respLen := buf.Len()
@@ -147,13 +147,14 @@ func SOAPCallWithHeaderClient(ctx context.Context,
 func SOAPCallWithHeader(ctx context.Context,
 	destURL string, customize func(req *http.Request),
 	action, soapHeader, reqBody string, resp interface{},
+	logger *slog.Logger,
 ) error {
-	return SOAPCallWithHeaderClient(ctx, nil, destURL, customize, action, soapHeader, reqBody, resp)
+	return SOAPCallWithHeaderClient(ctx, nil, destURL, customize, action, soapHeader, reqBody, resp, logger)
 }
 
 // SOAPCall destURL with SOAPAction=action, decoding the response body into resp.
-func SOAPCall(ctx context.Context, destURL, action string, reqBody string, resp interface{}) error {
-	return SOAPCallWithHeader(ctx, destURL, nil, action, "", reqBody, resp)
+func SOAPCall(ctx context.Context, destURL, action string, reqBody string, resp interface{}, logger *slog.Logger) error {
+	return SOAPCallWithHeader(ctx, destURL, nil, action, "", reqBody, resp, logger)
 }
 
 func splitHeadTail(b []byte, length int) (head string, tail string) {
