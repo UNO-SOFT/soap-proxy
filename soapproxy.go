@@ -40,7 +40,7 @@ import (
 
 	//"github.com/UNO-SOFT/otel"
 
-	"golang.org/x/exp/slog"
+	"log/slog"
 	"golang.org/x/net/html/charset"
 
 	"google.golang.org/grpc"

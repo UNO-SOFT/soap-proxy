@@ -28,7 +28,7 @@ import (
 
 	"github.com/klauspost/compress/gzhttp"
 	"github.com/rogpeppe/retry"
-	"golang.org/x/exp/slog"
+	"log/slog"
 )
 
 var (
