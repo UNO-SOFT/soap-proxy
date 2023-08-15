@@ -7,7 +7,7 @@ toolchain go1.21.0
 require (
 	aqwari.net/xml v0.0.0-20210331023308-d9421b293817
 	github.com/UNO-SOFT/grpcer v0.10.0
-	github.com/UNO-SOFT/zlog v0.7.3
+	github.com/UNO-SOFT/zlog v0.7.4
 	github.com/klauspost/compress v1.16.7
 	github.com/rogpeppe/retry v0.1.0
 	github.com/tgulacsi/oracall v0.24.1
@@ -22,10 +22,14 @@ require (
 	github.com/go-logfmt/logfmt v0.5.1 // indirect
 	github.com/go-logr/logr v1.2.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
+	github.com/go-logr/zerologr v1.2.3 // indirect
 	github.com/godror/godror v0.33.2 // indirect
 	github.com/godror/knownpb v0.1.0 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
+	github.com/mattn/go-colorable v0.1.13 // indirect
+	github.com/mattn/go-isatty v0.0.17 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
+	github.com/rs/zerolog v1.29.0 // indirect
 	github.com/tgulacsi/go-xmlrpc v0.2.2 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.42.0 // indirect
 	go.opentelemetry.io/otel v1.16.0 // indirect
