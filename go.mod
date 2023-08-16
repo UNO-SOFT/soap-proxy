@@ -7,7 +7,7 @@ toolchain go1.21.0
 require (
 	aqwari.net/xml v0.0.0-20210331023308-d9421b293817
 	github.com/UNO-SOFT/grpcer v0.10.0
-	github.com/UNO-SOFT/zlog v0.7.4
+	github.com/UNO-SOFT/zlog v0.7.6
 	github.com/klauspost/compress v1.16.7
 	github.com/rogpeppe/retry v0.1.0
 	github.com/tgulacsi/oracall v0.24.1
