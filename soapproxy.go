@@ -40,8 +40,8 @@ import (
 
 	//"github.com/UNO-SOFT/otel"
 
-	"log/slog"
 	"golang.org/x/net/html/charset"
+	"log/slog"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -61,6 +61,7 @@ type SOAPHandler struct {
 	DecodeInput       func(*string, *xml.Decoder, *xml.StartElement) (interface{}, error)                                                            `json:"-"`
 	EncodeOutput      func(*xml.Encoder, interface{}) error                                                                                          `json:"-"`
 	DecodeHeader      func(context.Context, *xml.Decoder, *xml.StartElement) (context.Context, func(context.Context, io.Writer, error) error, error) `json:"-"`
+	LogRequest        func(context.Context, string, error)
 	WSDL              string
 	wsdlWithLocations string `json:"-"`
 	Locations         []string
@@ -137,6 +138,9 @@ func (h *SOAPHandler) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	recv, err := h.Call(request.Action, ctx, inp, opts...)
+	if h.LogRequest != nil {
+		h.LogRequest(ctx, buf.String(), err)
+	}
 	if err != nil {
 		logger.Error("call", request.Action, "inp", fmt.Sprintf("%+v", inp), "error", err)
 		soapError(w, err)
