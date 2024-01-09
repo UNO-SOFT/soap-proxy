@@ -6,8 +6,12 @@ cloud.google.com/go/compute/metadata v0.2.3 h1:mg4jlk7mCAj6xXp9UJ4fjI9VUI5rubuGB
 cloud.google.com/go/compute/metadata v0.2.3/go.mod h1:VAV5nSsACxMJvgaAuX6Pk2AawlZn8kiOGuCv6gTkwuA=
 github.com/UNO-SOFT/grpcer v0.10.7 h1:4Puy6MNeWOV8inOg9GJrlmjs+0ncw92F6QLCA4JpUuM=
 github.com/UNO-SOFT/grpcer v0.10.7/go.mod h1:5JQogWDs2oxMFr5rmYx1dLhqjhfRojOvtPZBuQL+SvE=
+github.com/UNO-SOFT/grpcer v0.10.8 h1:sCQBh7H/ahbqvUJroO2lN1GJoIWiZ7my4JZWs2CiWTw=
+github.com/UNO-SOFT/grpcer v0.10.8/go.mod h1:/a+ZSf37pyE9CuF/SeiIlgRHDh/cZmwL5SbDqYkDAmU=
 github.com/UNO-SOFT/otel v0.6.0 h1:NeU7Yjubg8cBhg93JFdygy/HJjdC8CLxHGmP2gBnkdY=
 github.com/UNO-SOFT/otel v0.6.0/go.mod h1:Mbzvn7QbIVtZhFQoXoU1uKwpkhm56q9A5qiwxyOBECc=
+github.com/UNO-SOFT/otel v0.6.1 h1:j31SVt+jAgD5KaCDNpPAMzhihrG7JlidIWqoK/ZAwes=
+github.com/UNO-SOFT/otel v0.6.1/go.mod h1:Mbzvn7QbIVtZhFQoXoU1uKwpkhm56q9A5qiwxyOBECc=
 github.com/UNO-SOFT/zlog v0.8.1 h1:TEFkGJHtUfTRgMkLZiAjLSHALjwSBdw6/zByMC5GJt4=
 github.com/UNO-SOFT/zlog v0.8.1/go.mod h1:yqFOjn3OhvJ4j7ArJqQNA+9V+u6t9zSAyIZdWdMweWc=
 github.com/cncf/xds/go v0.0.0-20230607035331-e9ce68804cb4 h1:/inchEIKaYC1Akx+H+gqO04wryn5h75LSazbRlnya1k=

@@ -6,7 +6,7 @@ toolchain go1.21.0
 
 require (
 	aqwari.net/xml v0.0.0-20210331023308-d9421b293817
-	github.com/UNO-SOFT/grpcer v0.10.7
+	github.com/UNO-SOFT/grpcer v0.10.8
 	github.com/UNO-SOFT/zlog v0.8.1
 	github.com/klauspost/compress v1.17.4
 	github.com/rogpeppe/retry v0.1.0
@@ -17,7 +17,7 @@ require (
 )
 
 require (
-	github.com/UNO-SOFT/otel v0.6.0 // indirect
+	github.com/UNO-SOFT/otel v0.6.1 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
 	github.com/go-logr/logr v1.4.1 // indirect
