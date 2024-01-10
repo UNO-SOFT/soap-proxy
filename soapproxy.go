@@ -37,11 +37,13 @@ import (
 
 	"github.com/UNO-SOFT/grpcer"
 	"github.com/klauspost/compress/gzhttp"
+	"github.com/tgulacsi/go/iohlp"
 
 	//"github.com/UNO-SOFT/otel"
 
-	"golang.org/x/net/html/charset"
 	"log/slog"
+
+	"golang.org/x/net/html/charset"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -104,6 +106,7 @@ func (h *SOAPHandler) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	mayFilterEmptyTags(r, logger)
 
 	rI, inp, err := h.DecodeRequest(ctx, r)
+	r.Body.Close()
 	if err != nil {
 		logger.Error("decode", "into", fmt.Sprintf("%T", inp), "error", err)
 		if errors.Is(err, errDecode) {
@@ -425,26 +428,30 @@ var (
 
 func (h *SOAPHandler) DecodeRequest(ctx context.Context, r *http.Request) (grpcer.RequestInfo, interface{}, error) {
 	logger := h.Logger
-	buf := bufPool.Get().(*bytes.Buffer)
-	defer bufPool.Put(buf)
-	buf.Reset()
 
-	dec := newXMLDecoder(io.TeeReader(r.Body, buf))
+	sr, err := iohlp.MakeSectionReader(r.Body, 1<<20)
+	if err != nil {
+		return requestInfo{}, nil, err
+	}
+
+	dec := newXMLDecoder(io.NewSectionReader(sr, 0, sr.Size()))
 	st, err := findSoapBody(dec)
 	if err != nil {
-		return requestInfo{}, nil, fmt.Errorf("findSoapBody in %s: %w", buf.String(), err)
+		b, _ := grpcer.ReadHeadTail(sr, 1024)
+		return requestInfo{}, nil, fmt.Errorf("findSoapBody in %s: %w", string(b), err)
 	}
 	request := requestInfo{SOAPAction: strings.Trim(r.Header.Get("SOAPAction"), `"`)}
 	request.ForbidMerge, _ = strconv.ParseBool(r.Header.Get("Forbid-Merge"))
 	if h.DecodeHeader != nil {
-		hDec := newXMLDecoder(bytes.NewReader(buf.Bytes()))
+		hDec := newXMLDecoder(io.NewSectionReader(sr, 0, sr.Size()))
 		hSt, err := findSoapElt("header", hDec)
 		if err != nil {
 			logger.Error("findSoapHeader", "error", err)
 		} else {
 			_, encHeader, err := h.DecodeHeader(ctx, hDec, &hSt)
 			if err != nil {
-				logger.Error("DecodeHeader", "header", buf.String(), "error", err)
+				b, _ := grpcer.ReadHeadTail(sr, 1024)
+				logger.Error("DecodeHeader", "header", string(b), "error", err)
 				return request, nil, fmt.Errorf("decodeHeader: %w", err)
 			}
 			request.EncodeHeader = encHeader
@@ -465,7 +472,9 @@ func (h *SOAPHandler) DecodeRequest(ctx context.Context, r *http.Request) (grpce
 		if err = dec.Skip(); err != nil {
 			return request, nil, fmt.Errorf("skip: %w", err)
 		}
-		b := bytes.TrimSpace(buf.Bytes()[startPos:dec.InputOffset()])
+		b := make([]byte, dec.InputOffset()-startPos)
+		n, _ := sr.ReadAt(b, int64(startPos))
+		b = b[:n]
 		b = b[:bytes.LastIndex(b, []byte("</"))]
 
 		rawXML := string(b)
@@ -485,7 +494,8 @@ func (h *SOAPHandler) DecodeRequest(ctx context.Context, r *http.Request) (grpce
 		return request, inp, nil
 	}
 	if st, err = nextStart(dec); err != nil && !errors.Is(err, io.EOF) {
-		return request, nil, fmt.Errorf("nextStart: %s: %w", buf.String(), err)
+		b, _ := grpcer.ReadHeadTail(sr, 1024)
+		return request, nil, fmt.Errorf("nextStart: %s: %w", string(b), err)
 	}
 
 	if request.Action == "" {
@@ -495,7 +505,8 @@ func (h *SOAPHandler) DecodeRequest(ctx context.Context, r *http.Request) (grpce
 	if h.DecodeInput != nil {
 		inp, err := h.DecodeInput(&request.Action, dec, &st)
 		if err != nil {
-			return request, inp, fmt.Errorf("%s: %w", buf.String(), err)
+			b, _ := grpcer.ReadHeadTail(sr, 1024)
+			return request, inp, fmt.Errorf("%s: %w", string(b), err)
 		}
 		return request, inp, nil
 	}
@@ -523,7 +534,8 @@ func (h *SOAPHandler) DecodeRequest(ctx context.Context, r *http.Request) (grpce
 			logger.Error("ERROR", "error", err)
 		}
 
-		err = fmt.Errorf("into %T: %v\n%s: %w", inp, err, buf.String(), errDecode)
+		b, _ := grpcer.ReadHeadTail(sr, 1024)
+		err = fmt.Errorf("into %T: %v\n%s: %w", inp, err, string(b), errDecode)
 	}
 	return request, inp, err
 }

@@ -6,7 +6,7 @@ toolchain go1.21.0
 
 require (
 	aqwari.net/xml v0.0.0-20210331023308-d9421b293817
-	github.com/UNO-SOFT/grpcer v0.10.8
+	github.com/UNO-SOFT/grpcer v0.10.9
 	github.com/UNO-SOFT/zlog v0.8.1
 	github.com/klauspost/compress v1.17.4
 	github.com/rogpeppe/retry v0.1.0
@@ -18,6 +18,7 @@ require (
 
 require (
 	github.com/UNO-SOFT/otel v0.6.1 // indirect
+	github.com/dgryski/go-linebreak v0.0.0-20180812204043-d8f37254e7d3 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
 	github.com/go-logr/logr v1.4.1 // indirect
@@ -26,6 +27,7 @@ require (
 	github.com/godror/knownpb v0.1.1 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
+	github.com/tgulacsi/go v0.27.2 // indirect
 	github.com/tgulacsi/go-xmlrpc v0.2.2 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.46.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.46.1 // indirect
@@ -36,12 +38,12 @@ require (
 	go.opentelemetry.io/otel/sdk v1.21.0 // indirect
 	go.opentelemetry.io/otel/sdk/metric v1.21.0 // indirect
 	go.opentelemetry.io/otel/trace v1.21.0 // indirect
-	golang.org/x/exp v0.0.0-20230817173708-d852ddb80c63 // indirect
-	golang.org/x/mod v0.12.0 // indirect
+	golang.org/x/exp v0.0.0-20231006140011-7918f672742d // indirect
+	golang.org/x/mod v0.13.0 // indirect
 	golang.org/x/sys v0.15.0 // indirect
 	golang.org/x/term v0.15.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
-	golang.org/x/tools v0.12.1-0.20230815132531-74c255bcf846 // indirect
+	golang.org/x/tools v0.14.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20231212172506-995d672761c0 // indirect
 )
 
