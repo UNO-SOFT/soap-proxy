@@ -26,22 +26,19 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"net/http"
 	"reflect"
 	"strconv"
-	"time"
-
-	//"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/UNO-SOFT/grpcer"
 	"github.com/klauspost/compress/gzhttp"
 	"github.com/tgulacsi/go/iohlp"
 
-	//"github.com/UNO-SOFT/otel"
-
-	"log/slog"
+	"github.com/UNO-SOFT/otel"
 
 	"golang.org/x/net/html/charset"
 
@@ -54,20 +51,107 @@ var DefaultTimeout = 5 * time.Minute
 
 const textXML = "text/xml; charset=utf-8"
 
-// SOAPHandler is a http.Handler which proxies SOAP requests to the Client.
+// SOAPHandlerConfig is the configuration for NewSOAPHandler
+type SOAPHandlerConfig struct {
+	grpcer.Client `json:"-"`
+	*slog.Logger  `json:"-"`
+	DecodeInput   func(*string, *xml.Decoder, *xml.StartElement) (interface{}, error)                                                            `json:"-"`
+	EncodeOutput  func(*xml.Encoder, interface{}) error                                                                                          `json:"-"`
+	DecodeHeader  func(context.Context, *xml.Decoder, *xml.StartElement) (context.Context, func(context.Context, io.Writer, error) error, error) `json:"-"`
+	LogRequest    func(context.Context, string, error)
+	WSDL          string
+	Locations     []string
+	Timeout       time.Duration
+}
+
+// soapHandler is a http.Handler which proxies SOAP requests to the Client.
 // WSDL is served on GET requests.
-type SOAPHandler struct {
-	grpcer.Client     `json:"-"`
-	*slog.Logger      `json:"-"`
-	annotations       map[string]Annotation                                                                                                          `json:"-"`
-	DecodeInput       func(*string, *xml.Decoder, *xml.StartElement) (interface{}, error)                                                            `json:"-"`
-	EncodeOutput      func(*xml.Encoder, interface{}) error                                                                                          `json:"-"`
-	DecodeHeader      func(context.Context, *xml.Decoder, *xml.StartElement) (context.Context, func(context.Context, io.Writer, error) error, error) `json:"-"`
-	LogRequest        func(context.Context, string, error)
-	WSDL              string
-	wsdlWithLocations string `json:"-"`
-	Locations         []string
-	Timeout           time.Duration
+type soapHandler struct {
+	SOAPHandlerConfig
+	annotations       map[string]Annotation `json:"-"`
+	wsdlWithLocations string                `json:"-"`
+}
+
+func NewSOAPHandler(config SOAPHandlerConfig) soapHandler {
+	h := soapHandler{SOAPHandlerConfig: config}
+
+	if h.Logger == nil {
+		h.Logger = slog.Default()
+	}
+
+	// init wsdlWithLocations
+	h.wsdlWithLocations = h.WSDL
+	if len(h.Locations) != 0 {
+		if i := strings.LastIndex(h.WSDL, "</port>"); i >= 0 {
+			var buf strings.Builder
+			buf.WriteString(h.WSDL[:i])
+			for _, loc := range h.Locations {
+				loc = strings.Trim(loc, `"`)
+				buf.WriteString(`<soap:address location="`)
+				_ = xml.EscapeText(&buf, []byte(loc))
+				buf.WriteString("\" />\n")
+			}
+			buf.WriteString(h.WSDL[i:])
+			h.wsdlWithLocations = buf.String()
+		}
+	}
+
+	// init annotations
+	h.annotations = make(map[string]Annotation)
+	dec := newXMLDecoder(strings.NewReader(h.WSDL))
+	stack := make([]xml.StartElement, 0, 8)
+	names := make(map[string]struct{})
+	for {
+		tok, err := dec.Token()
+		if err != nil {
+			break
+		}
+		switch x := tok.(type) {
+		case xml.StartElement:
+			if x.Name.Local == "any" && (x.Name.Space == "" || x.Name.Space == "http://www.w3.org/2001/XMLSchema") {
+				if len(stack) >= 3 && stack[len(stack)-1].Name.Local == "sequence" && stack[len(stack)-2].Name.Local == "complexType" && stack[len(stack)-3].Name.Local == "element" {
+					for _, attr := range stack[len(stack)-3].Attr {
+						if attr.Name.Local == "name" {
+							names[attr.Value] = struct{}{}
+						}
+					}
+				}
+			}
+			stack = append(stack, x)
+		case xml.CharData:
+			if len(stack) > 1 && stack[len(stack)-1].Name.Local == "documentation" {
+				x = bytes.TrimSpace(x)
+				if bytes.HasPrefix(x, []byte{'{'}) {
+					m := make(map[string]Annotation)
+					if err = json.NewDecoder(bytes.NewReader(x)).Decode(&m); err != nil {
+						h.Error("parse", "documentation", string(x), "error", err)
+					} else {
+						if h.annotations == nil {
+							h.annotations = m
+						} else {
+							for k, v := range m {
+								h.annotations[k] = v
+							}
+						}
+					}
+				}
+			}
+		case xml.EndElement:
+			stack = stack[:len(stack)-1]
+		}
+	}
+	for nm := range names {
+		k := strings.TrimSuffix(nm, "_Input")
+		if k != nm {
+			if _, ok := names[k+"_Output"]; ok {
+				a := h.annotations[k]
+				a.Raw = true
+				h.annotations[k] = a
+			}
+		}
+	}
+
+	return h
 }
 
 type Annotation struct {
@@ -75,7 +159,7 @@ type Annotation struct {
 	RemoveNS bool
 }
 
-func (h *SOAPHandler) Input(name string) interface{} {
+func (h soapHandler) Input(name string) interface{} {
 	if inp := h.Client.Input(name); inp != nil {
 		return inp
 	}
@@ -87,13 +171,12 @@ func (h *SOAPHandler) Input(name string) interface{} {
 
 var bufPool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]byte, 0, 1024)) }}
 
-func (h *SOAPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h soapHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	gzhttp.GzipHandler(http.HandlerFunc(h.serveHTTP)).ServeHTTP(w, r)
 }
-func (h *SOAPHandler) serveHTTP(w http.ResponseWriter, r *http.Request) {
+func (h soapHandler) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
-	//ctx := otel.ExtractHTTP(r.Context(), r.Header)
-	ctx := r.Context()
+	ctx := otel.ExtractHTTP(r.Context(), r.Header)
 	logger := h.Logger
 	if r.Method == "GET" {
 		body := h.getWSDL()
@@ -175,7 +258,7 @@ const (
 </SOAP-ENV:Body></SOAP-ENV:Envelope>`
 )
 
-func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter, recv grpcer.Receiver, request requestInfo) {
+func (h soapHandler) encodeResponse(ctx context.Context, w http.ResponseWriter, recv grpcer.Receiver, request requestInfo) {
 	logger := h.Logger
 	w.Header().Set("Content-Type", textXML)
 	// nosemgrep: go.lang.security.audit.xss.no-io-writestring-to-responsewriter.no-io-writestring-to-responsewriter
@@ -430,7 +513,7 @@ var (
 	errDecode = errors.New("decode XML")
 )
 
-func (h *SOAPHandler) DecodeRequest(ctx context.Context, r *http.Request) (grpcer.RequestInfo, interface{}, error) {
+func (h soapHandler) DecodeRequest(ctx context.Context, r *http.Request) (grpcer.RequestInfo, interface{}, error) {
 	logger := h.Logger
 
 	sr, err := iohlp.MakeSectionReader(r.Body, 1<<20)
@@ -544,104 +627,21 @@ func (h *SOAPHandler) DecodeRequest(ctx context.Context, r *http.Request) (grpce
 	return request, inp, err
 }
 
-func (h *SOAPHandler) getWSDL() string {
-	if h.wsdlWithLocations != "" {
-		return h.wsdlWithLocations
-	}
-	h.wsdlWithLocations = h.WSDL
-	if len(h.Locations) == 0 {
-		return h.wsdlWithLocations
-	}
-	i := strings.LastIndex(h.WSDL, "</port>")
-	if i < 0 {
-		return h.wsdlWithLocations
-	}
-	var buf strings.Builder
-	buf.WriteString(h.WSDL[:i])
-	for _, loc := range h.Locations {
-		loc = strings.Trim(loc, `"`)
-		buf.WriteString(`<soap:address location="`)
-		_ = xml.EscapeText(&buf, []byte(loc))
-		buf.WriteString("\" />\n")
-	}
-	buf.WriteString(h.WSDL[i:])
-	h.wsdlWithLocations = buf.String()
-	return h.wsdlWithLocations
-}
+func (h soapHandler) getWSDL() string { return h.wsdlWithLocations }
 
-func (h *SOAPHandler) annotation(soapAction string) (annotation Annotation) {
+func (h soapHandler) annotation(soapAction string) (annotation Annotation) {
 	defer func() {
 		h.Info("annotations ends", "soapAction", soapAction, "annotation", annotation)
 	}()
 
-	get := func(soapAction string) Annotation {
-		var ok bool
-		if annotation, ok = h.annotations[soapAction]; ok {
-			return annotation
-		}
-		if i := strings.LastIndexByte(soapAction, '/'); i >= 0 {
-			annotation = h.annotations[soapAction[i+1:]]
-		}
+	var ok bool
+	if annotation, ok = h.annotations[soapAction]; ok {
 		return annotation
 	}
-	if h.annotations != nil {
-		return get(soapAction)
+	if i := strings.LastIndexByte(soapAction, '/'); i >= 0 {
+		annotation = h.annotations[soapAction[i+1:]]
 	}
-
-	h.annotations = make(map[string]Annotation)
-	dec := newXMLDecoder(strings.NewReader(h.WSDL))
-	stack := make([]xml.StartElement, 0, 8)
-	names := make(map[string]struct{})
-	for {
-		tok, err := dec.Token()
-		if err != nil {
-			break
-		}
-		switch x := tok.(type) {
-		case xml.StartElement:
-			if x.Name.Local == "any" && (x.Name.Space == "" || x.Name.Space == "http://www.w3.org/2001/XMLSchema") {
-				if len(stack) >= 3 && stack[len(stack)-1].Name.Local == "sequence" && stack[len(stack)-2].Name.Local == "complexType" && stack[len(stack)-3].Name.Local == "element" {
-					for _, attr := range stack[len(stack)-3].Attr {
-						if attr.Name.Local == "name" {
-							names[attr.Value] = struct{}{}
-						}
-					}
-				}
-			}
-			stack = append(stack, x)
-		case xml.CharData:
-			if len(stack) > 1 && stack[len(stack)-1].Name.Local == "documentation" {
-				x = bytes.TrimSpace(x)
-				if bytes.HasPrefix(x, []byte{'{'}) {
-					m := make(map[string]Annotation)
-					if err = json.NewDecoder(bytes.NewReader(x)).Decode(&m); err != nil {
-						h.Error("parse", "documentation", string(x), "error", err)
-					} else {
-						if h.annotations == nil {
-							h.annotations = m
-						} else {
-							for k, v := range m {
-								h.annotations[k] = v
-							}
-						}
-					}
-				}
-			}
-		case xml.EndElement:
-			stack = stack[:len(stack)-1]
-		}
-	}
-	for nm := range names {
-		k := strings.TrimSuffix(nm, "_Input")
-		if k != nm {
-			if _, ok := names[k+"_Output"]; ok {
-				a := h.annotations[k]
-				a.Raw = true
-				h.annotations[k] = a
-			}
-		}
-	}
-	return get(soapAction)
+	return annotation
 }
 
 func mayFilterEmptyTags(r *http.Request, logger *slog.Logger) {

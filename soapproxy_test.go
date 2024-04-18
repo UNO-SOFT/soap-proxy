@@ -40,7 +40,7 @@ func TestRawXML(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := &SOAPHandler{WSDL: string(b)}
+	h := NewSOAPHandler(SOAPHandlerConfig{WSDL: string(b)})
 	if !h.annotation("DbWebGdpr_Keres").Raw {
 		t.Error("DbWebGdpdr_Keres: wanted true, got false")
 	}
@@ -152,7 +152,7 @@ func (n nullClient) Call(name string, ctx context.Context, input interface{}, op
 }
 
 func TestDecodeRequest(t *testing.T) {
-	h := SOAPHandler{
+	h := NewSOAPHandler(SOAPHandlerConfig{
 		Client: nullClient{},
 		Logger: zlog.NewT(t).SLog(),
 
@@ -180,7 +180,7 @@ func TestDecodeRequest(t *testing.T) {
 				return nil
 			}, nil
 		},
-	}
+	})
 	req, err := http.NewRequest("POST", "http://example.com", strings.NewReader(loginRequest))
 	if err != nil {
 		t.Fatal(err)
