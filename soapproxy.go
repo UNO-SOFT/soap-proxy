@@ -183,7 +183,11 @@ func (h *SOAPHandler) encodeResponse(ctx context.Context, w http.ResponseWriter,
 
 	part, recvErr := recv.Recv()
 	next, nextErr := recv.Recv()
-	logger.Info("encodeResponse", "recvErr", recvErr, "nextErr", nextErr)
+	if recvErr != nil || nextErr != nil && !errors.Is(nextErr, io.EOF) {
+		logger.Error("encodeResponse", "recvErr", recvErr, "nextErr", nextErr)
+	} else {
+		logger.Debug("encodeResponse", "recvErr", recvErr, "nextErr", nextErr)
+	}
 
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
