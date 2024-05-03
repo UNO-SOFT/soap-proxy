@@ -291,7 +291,12 @@ func (h soapHandler) encodeResponse(ctx context.Context, w http.ResponseWriter, 
 
 	if recvErr != nil {
 		logger.Error("recv-error", "error", recvErr)
-		encodeSoapFault(w, recvErr)
+		encodeSoapFault(w, recvErr, true)
+		return
+	}
+	if nextErr != nil && !errors.Is(nextErr, io.EOF) {
+		logger.Error("next-error", "error", nextErr)
+		encodeSoapFault(w, nextErr, true)
 		return
 	}
 	typName := strings.TrimPrefix(fmt.Sprintf("%T", part), "*")
@@ -679,9 +684,9 @@ func soapError(w http.ResponseWriter, err error) {
 		}
 	}
 
-	encodeSoapFault(w, err)
+	encodeSoapFault(w, err, false)
 }
-func encodeSoapFault(w http.ResponseWriter, err error) error {
+func encodeSoapFault(w http.ResponseWriter, err error, justInner bool) error {
 	code := http.StatusInternalServerError
 	var c interface {
 		Code() int
@@ -718,13 +723,17 @@ func encodeSoapFault(w http.ResponseWriter, err error) error {
 			fault.Code = "SOAP-ENV:Client"
 		}
 	}
-	var buf bytes.Buffer
-	io.WriteString(&buf, soapEnvelopeHeader+`<SOAP-ENV:Body>`)
-	err = xml.NewEncoder(&buf).Encode(fault)
-	io.WriteString(&buf, soapEnvelopeFooter)
-
 	w.Header().Set("Content-Type", textXML)
-	w.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
+	var buf bytes.Buffer
+	if !justInner {
+		io.WriteString(&buf, soapEnvelopeHeader+`<SOAP-ENV:Body>`)
+	}
+	err = xml.NewEncoder(&buf).Encode(fault)
+	if !justInner {
+		io.WriteString(&buf, soapEnvelopeFooter)
+
+		w.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
+	}
 	w.WriteHeader(code)
 
 	// nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter
