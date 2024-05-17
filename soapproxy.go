@@ -350,7 +350,7 @@ func (h soapHandler) encodeResponse(ctx context.Context, w http.ResponseWriter, 
 			// nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter
 			w.Write([]byte{'\n'})
 			if part, err = recv.Recv(); err != nil {
-				if err != io.EOF {
+				if !errors.Is(err, io.EOF) {
 					logger.Error("recv", "error", err)
 				}
 				break
@@ -444,7 +444,7 @@ func (h soapHandler) encodeResponse(ctx context.Context, w http.ResponseWriter, 
 			part, err = recv.Recv()
 		}
 		if err != nil {
-			if err != io.EOF {
+			if !errors.Is(err, io.EOF) {
 				logger.Error("recv", "error", err)
 			}
 			break
@@ -824,7 +824,7 @@ func FilterEmptyTags(w io.Writer, r io.Reader) error {
 	for {
 		tok, err := dec.Token()
 		if err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				break
 			}
 			return err
