@@ -6,7 +6,7 @@ toolchain go1.22.0
 
 require (
 	aqwari.net/xml v0.0.0-20210331023308-d9421b293817
-	github.com/UNO-SOFT/grpcer v0.11.1
+	github.com/UNO-SOFT/grpcer v0.11.2
 	github.com/UNO-SOFT/otel v0.8.1
 	github.com/UNO-SOFT/zlog v0.8.1
 	github.com/klauspost/compress v1.17.8
