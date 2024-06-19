@@ -51,7 +51,8 @@ const (
 // SOAPCallWithHeader calls with the given SOAP- and extra header and action.
 func SOAPCallWithHeaderClient(ctx context.Context,
 	client *http.Client,
-	destURL string, customize func(req *http.Request),
+	destURL string,
+	customizeRequest func(req *http.Request), customizeResponse func(resp *http.Response),
 	action, soapHeader, reqBody string, resp interface{},
 	logger *slog.Logger,
 ) error {
@@ -88,8 +89,8 @@ func SOAPCallWithHeaderClient(ctx context.Context,
 			return err
 		}
 		request = request.WithContext(ctx)
-		if customize != nil {
-			customize(request)
+		if customizeRequest != nil {
+			customizeRequest(request)
 		}
 		request.Header.Set("Content-Type", "text/xml; charset=utf-8")
 		request.Header.Set("SOAPAction", action)
@@ -106,6 +107,9 @@ func SOAPCallWithHeaderClient(ctx context.Context,
 		if !iter.Next(ctx.Done()) {
 			return err
 		}
+	}
+	if customizeResponse != nil {
+		customizeResponse(response)
 	}
 	defer response.Body.Close()
 
@@ -145,16 +149,20 @@ func SOAPCallWithHeaderClient(ctx context.Context,
 
 // SOAPCallWithHeader calls with the given SOAP- and extra header and action.
 func SOAPCallWithHeader(ctx context.Context,
-	destURL string, customize func(req *http.Request),
+	destURL string,
+	customizeRequest func(*http.Request), customizeResponse func(*http.Response),
 	action, soapHeader, reqBody string, resp interface{},
 	logger *slog.Logger,
 ) error {
-	return SOAPCallWithHeaderClient(ctx, nil, destURL, customize, action, soapHeader, reqBody, resp, logger)
+	return SOAPCallWithHeaderClient(ctx, nil,
+		destURL, customizeRequest, customizeResponse,
+		action, soapHeader, reqBody, resp, logger,
+	)
 }
 
 // SOAPCall destURL with SOAPAction=action, decoding the response body into resp.
 func SOAPCall(ctx context.Context, destURL, action string, reqBody string, resp interface{}, logger *slog.Logger) error {
-	return SOAPCallWithHeader(ctx, destURL, nil, action, "", reqBody, resp, logger)
+	return SOAPCallWithHeader(ctx, destURL, nil, nil, action, "", reqBody, resp, logger)
 }
 
 func splitHeadTail(b []byte, length int) (head string, tail string) {
