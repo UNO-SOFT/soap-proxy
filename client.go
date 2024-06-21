@@ -1,4 +1,4 @@
-// Copyright 2020, 2022 Tamás Gulácsi
+// Copyright 2020, 2024 Tamás Gulácsi
 //
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,6 +28,7 @@ import (
 
 	"github.com/klauspost/compress/gzhttp"
 	"github.com/rogpeppe/retry"
+	"github.com/tgulacsi/go/iohlp"
 	"log/slog"
 )
 
@@ -83,6 +84,7 @@ func SOAPCallWithHeaderClient(ctx context.Context,
 	var response *http.Response
 	var dur time.Duration
 	var tryCount int
+	reqHead, reqTail := splitHeadTail(buf.Bytes(), 1024)
 	for iter := retryStrategy.Start(); ; {
 		request, err := http.NewRequest("POST", destURL, bytes.NewReader(buf.Bytes()))
 		if err != nil {
@@ -95,7 +97,7 @@ func SOAPCallWithHeaderClient(ctx context.Context,
 		request.Header.Set("Content-Type", "text/xml; charset=utf-8")
 		request.Header.Set("SOAPAction", action)
 		request.Header.Set("Length", strconv.Itoa(buf.Len()))
-		logger.Info("request", "POST", destURL, "header", request.Header, "xml", buf.String())
+		logger.Info("request", "POST", destURL, "header", request.Header, "reqHead", reqHead, "reqTail", reqTail)
 
 		tryCount++
 		start := time.Now()
@@ -119,8 +121,11 @@ func SOAPCallWithHeaderClient(ctx context.Context,
 		return fmt.Errorf("%s: %w", buf.String(), errors.New(response.Status))
 	}
 
-	tr := io.TeeReader(response.Body, buf)
-	dec := xml.NewDecoder(tr)
+	sr, err := iohlp.MakeSectionReader(response.Body, 1<<20)
+	if err != nil {
+		return err
+	}
+	dec := xml.NewDecoder(io.NewSectionReader(sr, 0, sr.Size()))
 	st, err := FindBody(dec)
 	if err != nil {
 		return err
@@ -130,12 +135,17 @@ func SOAPCallWithHeaderClient(ctx context.Context,
 		return err
 	}
 	if err != nil {
-		io.Copy(io.Discard, tr)
-		logger.Debug("response", buf.String(), "decoded", resp, "error", err)
+		buf.Reset()
+		io.Copy(buf, sr)
+		logger.Error("response", buf.String(), "decoded", resp, "error", err)
 		return err
 	}
-	respLen := buf.Len()
-	respHead, respTail := splitHeadTail(buf.Bytes(), 512)
+	respLen := sr.Size()
+	respHead, respTail := make([]byte, 1024), make([]byte, 1024)
+	n, _ := sr.ReadAt(respHead, 0)
+	if rest := sr.Size() - int64(n); rest > 0 {
+		sr.ReadAt(respTail, sr.Size()-min(rest, int64(cap(respTail))))
+	}
 	buf.Reset()
 	fmt.Fprintf(buf, "%#v", resp)
 	decHead, decTail := splitHeadTail(buf.Bytes(), 512)
