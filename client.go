@@ -97,12 +97,17 @@ func SOAPCallWithHeaderClient(ctx context.Context,
 		request.Header.Set("Content-Type", "text/xml; charset=utf-8")
 		request.Header.Set("SOAPAction", action)
 		request.Header.Set("Length", strconv.Itoa(buf.Len()))
-		logger.Info("request", "POST", destURL, "header", request.Header, "reqHead", reqHead, "reqTail", reqTail)
 
 		tryCount++
 		start := time.Now()
 		response, err = client.Do(request)
 		dur = time.Since(start)
+		logger.Info("request",
+			slog.String("POST", destURL),
+			slog.Any("header", request.Header),
+			slog.String("reqHead", reqHead), slog.String("reqTail", reqTail),
+			slog.Int("tryCount", tryCount), slog.String("dur", dur.String()),
+			slog.Any("error", err))
 		if err == nil {
 			break
 		}
@@ -118,20 +123,23 @@ func SOAPCallWithHeaderClient(ctx context.Context,
 	buf.Reset()
 	if response.StatusCode >= 400 {
 		io.Copy(buf, response.Body)
+		logger.Error("response", "status", response.Status, "body", buf.String())
 		return fmt.Errorf("%s: %w", buf.String(), errors.New(response.Status))
 	}
 
 	sr, err := iohlp.MakeSectionReader(response.Body, 1<<20)
 	if err != nil {
+		logger.Error("read response", "error", err)
 		return err
 	}
 	dec := xml.NewDecoder(io.NewSectionReader(sr, 0, sr.Size()))
 	st, err := FindBody(dec)
 	if err != nil {
+		logger.Error("FindBody", "error", err)
 		return err
 	}
 	err = dec.DecodeElement(resp, &st)
-	if !logger.Enabled(ctx, slog.LevelDebug) {
+	if !logger.Enabled(ctx, slog.LevelInfo) {
 		return err
 	}
 	if err != nil {
@@ -141,18 +149,23 @@ func SOAPCallWithHeaderClient(ctx context.Context,
 		return err
 	}
 	respLen := sr.Size()
-	respHead, respTail := make([]byte, 1024), make([]byte, 1024)
-	n, _ := sr.ReadAt(respHead, 0)
-	if rest := sr.Size() - int64(n); rest > 0 {
-		sr.ReadAt(respTail, sr.Size()-min(rest, int64(cap(respTail))))
+	var respHead, respTail [1024]byte
+	headLen, _ := sr.ReadAt(respHead[:], 0)
+	var tailLen int
+	if rest := sr.Size() - int64(headLen); rest > 0 {
+		tailLen, _ = sr.ReadAt(respTail[:], sr.Size()-min(rest, int64(cap(respTail))))
 	}
 	buf.Reset()
 	fmt.Fprintf(buf, "%#v", resp)
 	decHead, decTail := splitHeadTail(buf.Bytes(), 512)
-	logger.Info("response", "resp-length", respLen,
-		"resp-head", respHead, "resp-tail", respTail,
-		"decoded-length", buf.Len(), "decoded-head", decHead, "decoded-tail", decTail,
-		"dur", dur.String(), "try-count", tryCount,
+	logger.Info("response",
+		slog.Int64("resp-length", respLen),
+		slog.String("resp-head", string(respHead[:headLen])),
+		slog.String("resp-tail", string(respTail[:tailLen])),
+		slog.Int("decoded-length", buf.Len()),
+		slog.String("decoded-head", decHead),
+		slog.String("decoded-tail", decTail),
+		slog.String("dur", dur.String()), slog.Int("tryCount", tryCount),
 	)
 	return nil
 }
