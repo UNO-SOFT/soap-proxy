@@ -55,6 +55,7 @@ const textXML = "text/xml; charset=utf-8"
 type SOAPHandlerConfig struct {
 	grpcer.Client `json:"-"`
 	*slog.Logger  `json:"-"`
+	GetLogger     func(ctx context.Context) *slog.Logger
 	DecodeInput   func(*string, *xml.Decoder, *xml.StartElement) (interface{}, error)                                                            `json:"-"`
 	EncodeOutput  func(*xml.Encoder, interface{}) error                                                                                          `json:"-"`
 	DecodeHeader  func(context.Context, *xml.Decoder, *xml.StartElement) (context.Context, func(context.Context, io.Writer, error) error, error) `json:"-"`
@@ -62,6 +63,15 @@ type SOAPHandlerConfig struct {
 	WSDL          string
 	Locations     []string
 	Timeout       time.Duration
+}
+
+func (c SOAPHandlerConfig) getLogger(ctx context.Context) *slog.Logger {
+	if c.GetLogger != nil {
+		if lgr := c.GetLogger(ctx); lgr != nil {
+			return lgr
+		}
+	}
+	return c.Logger
 }
 
 // soapHandler is a http.Handler which proxies SOAP requests to the Client.
@@ -177,7 +187,7 @@ func (h soapHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (h soapHandler) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	ctx := otel.ExtractHTTP(r.Context(), r.Header)
-	logger := h.Logger
+	logger := h.getLogger(ctx)
 	if r.Method == "GET" {
 		body := h.getWSDL()
 		w.Header().Set("Content-Type", textXML)
@@ -259,7 +269,7 @@ const (
 )
 
 func (h soapHandler) encodeResponse(ctx context.Context, w http.ResponseWriter, recv grpcer.Receiver, request requestInfo) {
-	logger := h.Logger
+	logger := h.getLogger(ctx)
 	w.Header().Set("Content-Type", textXML)
 	// nosemgrep: go.lang.security.audit.xss.no-io-writestring-to-responsewriter.no-io-writestring-to-responsewriter
 	io.WriteString(w, soapEnvelopeHeader)
@@ -519,7 +529,7 @@ var (
 )
 
 func (h soapHandler) DecodeRequest(ctx context.Context, r *http.Request) (grpcer.RequestInfo, interface{}, error) {
-	logger := h.Logger
+	logger := h.getLogger(ctx)
 
 	sr, err := iohlp.MakeSectionReader(r.Body, 1<<20)
 	if err != nil {
