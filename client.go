@@ -36,10 +36,11 @@ var (
 	DefaultCallTimeout = time.Minute
 
 	retryStrategy = retry.Strategy{
-		Delay:       100 * time.Millisecond,
+		Delay:       500 * time.Millisecond,
 		MaxDelay:    5 * time.Second,
 		MaxDuration: 30 * time.Second,
 		Factor:      2,
+		MaxCount:    3,
 	}
 )
 
