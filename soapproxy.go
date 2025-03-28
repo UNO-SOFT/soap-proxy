@@ -549,7 +549,7 @@ func (h soapHandler) DecodeRequest(ctx context.Context, r *http.Request) (grpcer
 		hSt, err := findSoapElt("header", hDec)
 		if err != nil {
 			logger.Error("findSoapHeader", "error", err)
-		} else {
+		} else if hSt.Name.Local != "" {
 			_, encHeader, err := h.DecodeHeader(ctx, hDec, &hSt)
 			if err != nil {
 				b, _ := grpcer.ReadHeadTail(sr, 1024)
@@ -774,12 +774,13 @@ func findSoapElt(name string, dec *xml.Decoder) (xml.StartElement, error) {
 		}
 		var ok bool
 		if st, ok = tok.(xml.StartElement); ok {
-			if strings.EqualFold(st.Name.Local, name) &&
-				(st.Name.Space == "" ||
-					st.Name.Space == "SOAP-ENV" ||
-					st.Name.Space == "http://www.w3.org/2003/05/soap-envelope/" ||
-					st.Name.Space == "http://schemas.xmlsoap.org/soap/envelope/") {
-				return st, nil
+			if strings.EqualFold(st.Name.Local, name) {
+				switch st.Name.Space {
+				case "", "SOAP-ENV", "soapenv",
+					"http://www.w3.org/2003/05/soap-envelope/",
+					"http://schemas.xmlsoap.org/soap/envelope/":
+					return st, nil
+				}
 			}
 		}
 	}

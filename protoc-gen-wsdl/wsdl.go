@@ -16,7 +16,6 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -28,7 +27,6 @@ import (
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/types/descriptorpb"
 
-	"github.com/google/renameio/v2"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -226,6 +224,9 @@ func Generate(p *protogen.Plugin) error {
 		Locations         []string
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	now := time.Now()
 	for _, root := range roots {
 		root := root
@@ -269,11 +270,6 @@ func Generate(p *protogen.Plugin) error {
 				}
 			}
 
-			buf := bufPool.Get().(*bytes.Buffer)
-			buf.Reset()
-			defer bufPool.Put(buf)
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
 			grp, grpCtx := errgroup.WithContext(ctx)
 			pr, pw := io.Pipe()
 			grp.Go(func() error {
@@ -286,7 +282,11 @@ func Generate(p *protogen.Plugin) error {
 			shortCtx, shortCancel := context.WithTimeout(grpCtx, 3*time.Second)
 			cmd := exec.CommandContext(shortCtx, "xmllint", "--format", "-")
 			cmd.Stdin = pr
-			gw := gzip.NewWriter(buf)
+			f := p.NewGeneratedFile(
+				strings.TrimSuffix(pkg, ".proto")+".wsdl.gz",
+				protogen.GoImportPath(pkg),
+			)
+			gw := gzip.NewWriter(f)
 			cmd.Stdout = gw
 			cmd.Stderr = os.Stderr
 			grp.Go(func() error {
@@ -303,18 +303,12 @@ func Generate(p *protogen.Plugin) error {
 				return err
 			}
 
-			gzContent := buf.Bytes()
-
-			destFn := strings.TrimSuffix(path.Base(pkg), ".proto") + ".wsdl.gz"
-			if err := renameio.WriteFile(destFn, gzContent, 0640); err != nil {
-				return err
-			}
-
 			// also, embed the wsdl
 			if _, err := fmt.Fprintf(
 				p.NewGeneratedFile(
-					strings.TrimSuffix(destFn, ".gz")+".go",
-					protogen.GoImportPath(pkg)),
+					strings.TrimSuffix(pkg, ".proto")+".wsdl.go",
+					protogen.GoImportPath(pkg),
+				),
 				`package %s
 
 import _ "embed"
@@ -322,7 +316,7 @@ import _ "embed"
 // WSDLgz contains the WSDL, gzipped.
 //go:embed %s
 var WSDLgz []byte`,
-				destPkg, filepath.Base(destFn),
+				destPkg, strings.TrimSuffix(path.Base(pkg), ".proto")+".wsdl.gz",
 			); err != nil {
 				return err
 			}
