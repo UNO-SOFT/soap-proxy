@@ -13,7 +13,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path"
@@ -32,6 +32,16 @@ import (
 var opts protogen.Options
 
 func main() {
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	if false {
+		if fh, err := os.CreateTemp("", fmt.Sprintf("protoc-gen-wsdl-%d-*.log", +time.Now().UnixMicro())); err != nil {
+			slog.Warn("create log file", "error", err)
+		} else {
+			slog.SetDefault(slog.New(slog.NewTextHandler(fh, &slog.HandlerOptions{Level: slog.LevelDebug})))
+			defer fh.Close()
+		}
+	} else {
+	}
 	opts.Run(Generate)
 }
 
@@ -139,9 +149,14 @@ func Generate(p *protogen.Plugin) error {
 	for i := len(files) - 1; i >= 0; i-- {
 		f := files[i]
 		msgs, pkg := f.GetMessageType(), f.GetPackage()
-		for _, m := range msgs {
-			allTypes["."+pkg+"."+m.GetName()] = m
+		var dotPkg string
+		if pkg != "" {
+			dotPkg = "." + pkg
 		}
+		for _, m := range msgs {
+			allTypes[dotPkg+"."+m.GetName()] = m
+		}
+		slog.Debug("beforeSourceCodeInfo", "allTypes", allTypes)
 		if si := f.GetSourceCodeInfo(); si != nil {
 			for _, loc := range si.GetLocation() {
 				if path := loc.GetPath(); len(path) >= 4 && path[0] == 4 && path[2] == 2 {
@@ -182,6 +197,7 @@ func Generate(p *protogen.Plugin) error {
 			}
 		}
 	}
+	slog.Debug("types", "msgTypes", msgTypes)
 
 	// delete not needed message types
 	wsdlTemplate := template.Must(template.
@@ -261,6 +277,7 @@ func Generate(p *protogen.Plugin) error {
 				buf2.Reset()
 				bufPool.Put(buf2)
 			}()
+			slog.Debug("wsdlTemplate.Execute", "data", data)
 			err := wsdlTemplate.Execute(buf, data)
 			if err != nil {
 				p.Error(err)
@@ -276,7 +293,7 @@ func Generate(p *protogen.Plugin) error {
 			fmtErr := cmd.Run()
 			cancel()
 			if fmtErr != nil {
-				log.Println(cmd.Args, fmtErr)
+				slog.Error("xmllint format", "command", cmd.Args, "error", fmtErr)
 				buf2.Reset()
 				if gzErr := gzb64(buf2, content); gzErr != nil {
 					return gzErr
@@ -389,7 +406,7 @@ func (t *typer) mkType(fullName string, m *descriptorpb.DescriptorProto, documen
 					for {
 						tok, err := xr.Token()
 						if err != nil {
-							log.Printf("Parse %q of %q as XML: %v", docu, name, err)
+							slog.Error("Parse", "docu", docu, "name", name, "error", err)
 							break
 						}
 						var ok bool
@@ -400,7 +417,7 @@ func (t *typer) mkType(fullName string, m *descriptorpb.DescriptorProto, documen
 					//log.Printf("st=%+v namePrefix=%q", st, namePrefix)
 					if st.Name.Local != "" {
 						if !(st.Name.Local == "schema" && (st.Name.Space == "" || st.Name.Space == "http://www.w3.org/2001/XMLSchema")) {
-							log.Printf("Documentation of %q is XML, but does not start with \"schema\" (but %q)", name, st.Name)
+							slog.Warn("Documentation does not start with schema", "name", name, "prefix", st.Name)
 						} else if strings.Contains(docu, "element name=\""+namePrefix+"_Input\"") &&
 							strings.Contains(docu, "element name=\""+name+"\" ") {
 							delete(documentation, namePrefix)
@@ -486,6 +503,7 @@ func (t *typer) mkType(fullName string, m *descriptorpb.DescriptorProto, documen
 			continue
 		}
 		t.seen[k] = struct{}{}
+		slog.Debug("xsdTypeTemplate.Execute", "k", k, "vv", vv)
 		if err := xsdTypeTemplate.Execute(buf, newFields(k, vv)); err != nil {
 			panic(err)
 		}
@@ -529,7 +547,7 @@ func mkXSDElement(f Field) string {
 	} else {
 		typ = xsdType(f.GetType(), f.GetTypeName())
 		if typ == "" {
-			log.Printf("no type name for %s (%s)", f.GetTypeName(), f)
+			slog.Warn("no type name for", "type", f.GetTypeName(), "f", f)
 		}
 	}
 	maxOccurs := "1"
