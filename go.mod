@@ -9,11 +9,13 @@ require (
 	github.com/UNO-SOFT/grpcer v0.11.7
 	github.com/UNO-SOFT/otel v0.10.10
 	github.com/UNO-SOFT/zlog v0.8.1
+	github.com/google/renameio/v2 v2.0.0
 	github.com/klauspost/compress v1.18.0
 	github.com/rogpeppe/retry v0.1.0
 	github.com/tgulacsi/go v0.27.8
 	github.com/tgulacsi/oracall v0.24.1
 	golang.org/x/net v0.37.0
+	golang.org/x/sync v0.12.0
 	google.golang.org/grpc v1.71.0
 	google.golang.org/protobuf v1.36.6
 )
@@ -48,7 +50,6 @@ require (
 	go.opentelemetry.io/proto/otlp v1.5.0 // indirect
 	golang.org/x/exp v0.0.0-20250305212735-054e65f0b394 // indirect
 	golang.org/x/mod v0.24.0 // indirect
-	golang.org/x/sync v0.12.0 // indirect
 	golang.org/x/sys v0.31.0 // indirect
 	golang.org/x/term v0.30.0 // indirect
 	golang.org/x/text v0.23.0 // indirect

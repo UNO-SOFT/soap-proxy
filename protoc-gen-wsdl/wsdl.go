@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"encoding/base64"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -17,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -27,6 +27,9 @@ import (
 
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/types/descriptorpb"
+
+	"github.com/google/renameio/v2"
+	"golang.org/x/sync/errgroup"
 )
 
 var opts protogen.Options
@@ -266,62 +269,60 @@ func Generate(p *protogen.Plugin) error {
 				}
 			}
 
-			destFn := strings.TrimSuffix(path.Base(pkg), ".proto") + ".wsdl"
 			buf := bufPool.Get().(*bytes.Buffer)
 			buf.Reset()
-			buf2 := bufPool.Get().(*bytes.Buffer)
-			buf2.Reset()
-			defer func() {
-				buf.Reset()
-				bufPool.Put(buf)
-				buf2.Reset()
-				bufPool.Put(buf2)
-			}()
-			slog.Debug("wsdlTemplate.Execute", "data", data)
-			err := wsdlTemplate.Execute(buf, data)
-			if err != nil {
+			defer bufPool.Put(buf)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			grp, grpCtx := errgroup.WithContext(ctx)
+			pr, pw := io.Pipe()
+			grp.Go(func() error {
+				defer pw.Close()
+				slog.Debug("wsdlTemplate.Execute", "data", data)
+				err := wsdlTemplate.Execute(pw, data)
+				pw.CloseWithError(err)
+				return err
+			})
+			shortCtx, shortCancel := context.WithTimeout(grpCtx, 3*time.Second)
+			cmd := exec.CommandContext(shortCtx, "xmllint", "--format", "-")
+			cmd.Stdin = pr
+			gw := gzip.NewWriter(buf)
+			cmd.Stdout = gw
+			cmd.Stderr = os.Stderr
+			grp.Go(func() error {
+				defer shortCancel()
+				defer gw.Close()
+				if err := cmd.Run(); err != nil {
+					slog.Error("xmllint format", "command", cmd.Args, "error", err)
+					return fmt.Errorf("%q: %w", cmd.Args, err)
+				}
+				return nil
+			})
+			if err := grp.Wait(); err != nil {
 				p.Error(err)
 				return err
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-			cmd := exec.CommandContext(ctx, "xmllint", "--format", "-")
-			content := buf.Bytes()
-			var gzContent []byte
-			cmd.Stdin = bytes.NewReader(content)
-			cmd.Stdout, cmd.Stderr = buf2, os.Stderr
-			fmtErr := cmd.Run()
-			cancel()
-			if fmtErr != nil {
-				slog.Error("xmllint format", "command", cmd.Args, "error", fmtErr)
-				buf2.Reset()
-				if gzErr := gzb64(buf2, content); gzErr != nil {
-					return gzErr
-				}
-				gzContent = buf2.Bytes()
-			} else {
-				content = buf2.Bytes()
-				buf.Reset()
-				if gzErr := gzb64(buf, content); gzErr != nil {
-					return gzErr
-				}
-				gzContent = buf.Bytes()
-			}
-			if _, err = p.NewGeneratedFile(destFn, protogen.GoImportPath(pkg)).Write(
-				content,
-			); err != nil {
+			gzContent := buf.Bytes()
+
+			destFn := strings.TrimSuffix(path.Base(pkg), ".proto") + ".wsdl.gz"
+			if err := renameio.WriteFile(destFn, gzContent, 0640); err != nil {
 				return err
 			}
 
 			// also, embed the wsdl
-			if _, err = fmt.Fprintf(
-				p.NewGeneratedFile(destFn+".go", protogen.GoImportPath(pkg)),
+			if _, err := fmt.Fprintf(
+				p.NewGeneratedFile(
+					strings.TrimSuffix(destFn, ".gz")+".go",
+					protogen.GoImportPath(pkg)),
 				`package %s
 
-// WSDLgzb64 contains the WSDL, gzipped and base64-encoded.
-// You can easily read it with soapproxy.Ungzb64.
-const WSDLgzb64 = `+"`%s`\n",
-				destPkg, gzContent,
+import _ "embed"
+
+// WSDLgz contains the WSDL, gzipped.
+//go:embed %s
+var WSDLgz []byte`,
+				destPkg, filepath.Base(destFn),
 			); err != nil {
 				return err
 			}
@@ -758,21 +759,6 @@ func CamelCase(text string) string {
 	},
 		text,
 	)
-}
-
-func gzb64(w io.Writer, b []byte) error {
-	bw := base64.NewEncoder(base64.StdEncoding, w)
-	gw := gzip.NewWriter(bw)
-	if _, err := gw.Write(b); err != nil {
-		return err
-	}
-	if err := gw.Close(); err != nil {
-		return err
-	}
-	if err := bw.Close(); err != nil {
-		return err
-	}
-	return nil
 }
 
 func xmlEscape(s string) string {
