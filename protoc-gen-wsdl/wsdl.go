@@ -282,10 +282,8 @@ func Generate(p *protogen.Plugin) error {
 			shortCtx, shortCancel := context.WithTimeout(grpCtx, 3*time.Second)
 			cmd := exec.CommandContext(shortCtx, "xmllint", "--format", "-")
 			cmd.Stdin = pr
-			f := p.NewGeneratedFile(
-				strings.TrimSuffix(pkg, ".proto")+".wsdl.gz",
-				protogen.GoImportPath(pkg),
-			)
+			baseFn := strings.TrimSuffix(path.Base(pkg), ".proto")
+			f := p.NewGeneratedFile(baseFn+".wsdl.gz", protogen.GoImportPath(pkg))
 			gw := gzip.NewWriter(f)
 			cmd.Stdout = gw
 			cmd.Stderr = os.Stderr
@@ -305,10 +303,7 @@ func Generate(p *protogen.Plugin) error {
 
 			// also, embed the wsdl
 			if _, err := fmt.Fprintf(
-				p.NewGeneratedFile(
-					strings.TrimSuffix(pkg, ".proto")+".wsdl.go",
-					protogen.GoImportPath(pkg),
-				),
+				p.NewGeneratedFile(baseFn+".wsdl.go", protogen.GoImportPath(pkg)),
 				`package %s
 
 import _ "embed"
@@ -316,7 +311,7 @@ import _ "embed"
 // WSDLgz contains the WSDL, gzipped.
 //go:embed %s
 var WSDLgz []byte`,
-				destPkg, strings.TrimSuffix(path.Base(pkg), ".proto")+".wsdl.gz",
+				destPkg, baseFn+".wsdl.gz",
 			); err != nil {
 				return err
 			}
