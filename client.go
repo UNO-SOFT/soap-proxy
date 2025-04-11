@@ -99,6 +99,10 @@ func SOAPCallWithHeaderClient(ctx context.Context,
 		request.Header.Set("SOAPAction", action)
 		request.Header.Set("Length", strconv.Itoa(buf.Len()))
 
+		if tryCount == 0 && logger.Enabled(ctx, slog.LevelDebug) {
+			logger.Debug("request", "header", request.Header, "body", buf.Bytes())
+		}
+
 		tryCount++
 		start := time.Now()
 		response, err = client.Do(request)

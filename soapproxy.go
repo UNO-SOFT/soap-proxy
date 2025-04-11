@@ -548,7 +548,9 @@ func (h soapHandler) DecodeRequest(ctx context.Context, r *http.Request) (grpcer
 		hDec := newXMLDecoder(io.NewSectionReader(sr, 0, sr.Size()))
 		hSt, err := findSoapElt("header", hDec)
 		if err != nil {
-			logger.Error("findSoapHeader", "error", err)
+			if !errors.Is(err, io.EOF) {
+				logger.Error("findSoapHeader", "error", err)
+			}
 		} else if hSt.Name.Local != "" {
 			_, encHeader, err := h.DecodeHeader(ctx, hDec, &hSt)
 			if err != nil {
