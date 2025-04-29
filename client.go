@@ -154,22 +154,32 @@ func SOAPCallWithHeaderClient(ctx context.Context,
 		return err
 	}
 	respLen := sr.Size()
-	var respHead, respTail [1024]byte
-	headLen, _ := sr.ReadAt(respHead[:], 0)
-	var tailLen int
-	if rest := sr.Size() - int64(headLen); rest > 0 {
-		tailLen, _ = sr.ReadAt(respTail[:], sr.Size()-min(rest, int64(cap(respTail))))
+	var respHead, respTail []byte
+	if logger.Enabled(ctx, slog.LevelDebug) {
+		respHead, _ = io.ReadAll(io.NewSectionReader(sr, 0, sr.Size()))
+	} else {
+		var respHeadA, respTailA [2048]byte
+		length, _ := sr.ReadAt(respHeadA[:], 0)
+		respHead = respHeadA[:length]
+		if rest := sr.Size() - int64(length); rest > 0 {
+			length, _ = sr.ReadAt(respTailA[:], sr.Size()-min(rest, int64(cap(respTail))))
+			respTail = respTailA[:length]
+		}
 	}
 	buf.Reset()
 	fmt.Fprintf(buf, "%#v", resp)
-	decHead, decTail := splitHeadTail(buf.Bytes(), 512)
+	decHead, decTail := splitHeadTail(buf.Bytes(), (buf.Len()+1)/2)
 	logger.Info("response",
-		slog.Int64("resp-length", respLen),
-		slog.String("resp-head", string(respHead[:headLen])),
-		slog.String("resp-tail", string(respTail[:tailLen])),
-		slog.Int("decoded-length", buf.Len()),
-		slog.String("decoded-head", decHead),
-		slog.String("decoded-tail", decTail),
+		slog.Group("resp",
+			slog.Int64("length", respLen),
+			slog.String("head", string(respHead)),
+			slog.String("tail", string(respTail)),
+		),
+		slog.Group("decoded",
+			slog.Int("length", buf.Len()),
+			slog.String("head", decHead),
+			slog.String("tail", decTail),
+		),
 		slog.String("dur", dur.String()), slog.Int("tryCount", tryCount),
 	)
 	return nil
