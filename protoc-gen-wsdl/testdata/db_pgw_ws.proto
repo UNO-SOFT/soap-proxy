@@ -39,18 +39,140 @@ message BankkartyaRegisztracioTorles_Input {
 	// 
 	// NUMBER(9)
 	sint32 p_szerz_azon = 2;
-}
 
-// p_limit IN osszeg_t DEFAULT NULL,     --a tokennel indítható legnagyobb tranzakciós összeg
-message BankkartyaRegisztracioTorles_Output {
+	// 
+	// NUMBER(12, 2)
+	string evesdij = 3;
+}
+// 
+// 
+message DbWebPortal_FlottaGjmuRecTyp_Brc2Owner {
 
 	// 
 	// INTEGER(10)
-	sint32 p_hiba_kod = 1;
+	sint32 meret2 = 1;
+
+	// 
+	// VARCHAR2(2)
+	string jelleg = 2;
+
+	// 
+	// VARCHAR2(1)
+	string uzjelleg = 3;
+
+	// 
+	// VARCHAR2(11)
+	string rendszam = 4;
+
+	// 
+	// VARCHAR2(40)
+	string alvazszam = 5;
+
+	// 
+	// VARCHAR2(40)
+	string gyartmany = 6;
+
+	// 
+	// VARCHAR2(40)
+	string tipus = 7;
+
+	// 
+	// INTEGER(10)
+	sint32 kw = 8;
+
+	// 
+	// INTEGER(10)
+	sint32 utasszam = 9;
+
+	// 
+	// INTEGER(10)
+	sint32 mtomeg = 10;
+
+	// 
+	// INTEGER(10)
+	sint32 kotes_oka = 11;
+
+	// 
+	// VARCHAR2(1)
+	string bonusz_nyilatkozat = 12;
+
+	// 
+	// DATE
+	google.protobuf.Timestamp kockezd = 13;
+
+	// 
+	// VARCHAR2(24)
+	string elozmeny_kotvenyszam = 14;
+
+	// 
+	// VARCHAR2(2)
+	string elozmeny_bizt_kod = 15;
+
+	// 
+	// VARCHAR2(11)
+	string elozmeny_rendszam = 16;
+
+	// 
+	// VARCHAR2(2)
+	string elozmeny_torles_oka = 17;
+
+	// 
+	// DATE
+	google.protobuf.Timestamp elozmeny_szervege = 18;
+
+	// 
+	// INTEGER(10)
+	sint32 gjmu_erteke = 19;
+
+	// 
+	// INTEGER(10)
+	sint32 onresz_szaz = 20;
+
+	// 
+	// INTEGER(10)
+	sint32 onresz_min = 21;
+
+	// 
+	// NUMBER(5, 3)
+	string onresz_szorzo = 22;
+
+	// 
+	// NUMBER(12, 2)
+	string evesdij = 23;
+
+	// 
+	// VARCHAR2(300)
+	string zaradek = 24;
+
+	// 
+	// NUMBER(12, 2)
+	string limit_kar = 25;
+
+	// 
+	// NUMBER(3)
+	sint32 limit_kar_pn = 26;
+
+	// 
+	// NUMBER(12, 2)
+	string limit_ev = 27;
+
+	// 
+	// NUMBER(3)
+	sint32 limit_ev_pn = 28;
+}
+
+
+// p_limit IN osszeg_t DEFAULT NULL,     --a tokennel indítható legnagyobb tranzakciós összeg
+message BankkartyaRegisztracioTorles_Output {
+	repeated DbWebPortal_FlottaGjmuRecTyp_Brc2Owner p_gepjarmuvek = 1;
+
+	// 
+	// INTEGER(10)
+	sint32 p_hiba_kod = 2;
 
 	// 
 	// VARCHAR2(32767)
-	string p_hiba_szov = 2;
+	string p_hiba_szov = 3;
 }
 
 //   PROCEDURE beszedes_visszaigazolas(

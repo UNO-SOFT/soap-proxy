@@ -464,8 +464,16 @@ func (t *typer) mkType(fullName string, m *descriptorpb.DescriptorProto, documen
 	newFields := func(name string, fields []*descriptorpb.FieldDescriptorProto) Fields {
 		ff := filterHiddenFields(fields)
 		fs := Fields{Name: name, Fields: make([]Field, len(ff))}
+		sName := name
+		if pkg, rest, ok := strings.Cut(name, "_"); ok {
+			sName = "." + unCamelCase(pkg) + "." + rest
+		}
 		for i, f := range ff {
-			fld := Field{FieldDescriptorProto: f, Documentation: documentation[fullName+"."+f.GetName()]}
+			fld := Field{FieldDescriptorProto: f, Documentation: documentation[sName+"."+f.GetName()]}
+			// if fld.Documentation == "" && len(documentation) != 0 {
+			// 	slog.Info("xsdTypeFromDocu", "field", sName+"."+f.GetName(), "docu", fld.Documentation,
+			// 		"have", slices.Collect(maps.Keys(documentation)))
+			// }
 			if xt := xsdTypeFromDocu(fld.Documentation); xt.Name != "" {
 				fld.XSDTypeName = xt.Name
 			}
@@ -473,6 +481,7 @@ func (t *typer) mkType(fullName string, m *descriptorpb.DescriptorProto, documen
 		}
 		return fs
 	}
+	// slog.Info("have", "docu", documentation)
 	if fullName == "" {
 		fullName = m.GetName()
 	}
@@ -748,6 +757,25 @@ func CamelCase(text string) string {
 	},
 		text,
 	)
+}
+
+func unCamelCase(s string) string {
+	var buf strings.Builder
+	for _, r := range s {
+		if r == '_' {
+			buf.WriteByte('.')
+			continue
+		}
+		if unicode.IsUpper(r) {
+			if buf.Len() != 0 {
+				buf.WriteByte('_')
+			}
+			buf.WriteRune(unicode.ToLower(r))
+			continue
+		}
+		buf.WriteRune(r)
+	}
+	return buf.String()
 }
 
 func xmlEscape(s string) string {
