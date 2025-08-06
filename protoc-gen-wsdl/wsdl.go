@@ -568,7 +568,7 @@ func mkXSDElement(f Field) string {
 	)
 }
 
-var rOraType = regexp.MustCompile(`(?:^|\s*)(DATE|(?:INTEGER|NUMBER)(?:[(][0-9]+[)])?|VARCHAR2[(][0-9]+[)]|NUMBER[(][0-9]+,[0-9]+[)])$`)
+var rOraType = regexp.MustCompile(`(?:^|\s*)(DATE|(?:INTEGER|NUMBER)(?:[(][0-9]+[)])?|(?:CHAR|VARCHAR2)[(][0-9]+[)]|NUMBER[(][0-9]+, *[0-9]+[)])$`)
 
 type XSDType struct {
 	Name          string
@@ -629,6 +629,7 @@ func xsdTypeFromDocu(docu string) XSDType {
 
 	case "NUM", "INT":
 		if typ[e] == 'R' {
+			xt.Name = "decimal"
 			return xt
 		}
 		i := strings.IndexByte(typ[b:e], ',')
@@ -648,7 +649,7 @@ func xsdTypeFromDocu(docu string) XSDType {
 			return xt
 		}
 
-		scale, err := strconv.Atoi(typ[i+1 : e])
+		scale, err := strconv.Atoi(strings.TrimSpace(typ[i+1 : e]))
 		if err != nil {
 			panic(fmt.Errorf("%q: %w", typ[i+1:e], err))
 		}
