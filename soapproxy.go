@@ -258,14 +258,14 @@ func (info requestInfo) Name() string { return info.Action }
 
 const (
 	soapEnvelopeHeader = xml.Header + `
-<SOAP-ENV:Envelope
-	xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
+<soapenv:Envelope
+	xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
 	xmlns:xsi="http://www.w3.org/1999/XMLSchema-instance"
 	xmlns:xsd="http://www.w3.org/1999/XMLSchema"
-	SOAP-ENV:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
+	soapenv:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
 `
 	soapEnvelopeFooter = `
-</SOAP-ENV:Body></SOAP-ENV:Envelope>`
+</soapenv:Body></soapenv:Envelope>`
 )
 
 func (h soapHandler) encodeResponse(ctx context.Context, w http.ResponseWriter, recv grpcer.Receiver, request requestInfo) {
@@ -286,9 +286,9 @@ func (h soapHandler) encodeResponse(ctx context.Context, w http.ResponseWriter, 
 	defer bufPool.Put(buf)
 	if request.EncodeHeader != nil {
 		buf.Reset()
-		buf.WriteString("<SOAP-ENV:Header>\n")
+		buf.WriteString("<soapenv:Header>\n")
 		hdrErr := request.EncodeHeader(ctx, buf, recvErr)
-		buf.WriteString("</SOAP-ENV:Header>\n")
+		buf.WriteString("</soapenv:Header>\n")
 		if hdrErr != nil {
 			logger.Error("EncodeHeader", "error", hdrErr)
 		} else {
@@ -296,7 +296,7 @@ func (h soapHandler) encodeResponse(ctx context.Context, w http.ResponseWriter, 
 			w.Write(buf.Bytes())
 		}
 	}
-	io.WriteString(w, "<SOAP-ENV:Body>\n")
+	io.WriteString(w, "<soapenv:Body>\n")
 	defer func() { io.WriteString(w, soapEnvelopeFooter) }()
 
 	if recvErr != nil {
@@ -730,15 +730,15 @@ func encodeSoapFault(w http.ResponseWriter, err error, justInner bool) error {
 		}
 	}
 	if fault.Code == "" {
-		fault.Code = "SOAP-ENV:Server"
+		fault.Code = "soapenv:Server"
 		if code < 500 {
-			fault.Code = "SOAP-ENV:Client"
+			fault.Code = "soapenv:Client"
 		}
 	}
 	w.Header().Set("Content-Type", textXML)
 	var buf bytes.Buffer
 	if !justInner {
-		io.WriteString(&buf, soapEnvelopeHeader+`<SOAP-ENV:Body>`)
+		io.WriteString(&buf, soapEnvelopeHeader+`<soapenv:Body>`)
 	}
 	err = xml.NewEncoder(&buf).Encode(fault)
 	if !justInner {
@@ -949,7 +949,7 @@ func newXMLDecoder(r io.Reader) *xml.Decoder {
 
 // SOAPFault fault
 type SOAPFault struct {
-	XMLName xml.Name `xml:"SOAP-ENV:Fault"`
+	XMLName xml.Name `xml:"http://schemas.xmlsoap.org/soap/envelope/ Fault"`
 	Code    string   `xml:"faultcode,omitempty"`
 	String  string   `xml:"faultstring,omitempty"`
 	Actor   string   `xml:"faultactor,omitempty"`
