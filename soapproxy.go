@@ -35,10 +35,9 @@ import (
 	"time"
 
 	"github.com/UNO-SOFT/grpcer"
+	"github.com/UNO-SOFT/otel"
 	"github.com/klauspost/compress/gzhttp"
 	"github.com/tgulacsi/go/iohlp"
-
-	"github.com/UNO-SOFT/otel"
 
 	"golang.org/x/net/html/charset"
 
@@ -740,6 +739,7 @@ func encodeSoapFault(w http.ResponseWriter, err error, justInner bool) error {
 	if !justInner {
 		io.WriteString(&buf, soapEnvelopeHeader+`<soapenv:Body>`)
 	}
+
 	err = xml.NewEncoder(&buf).Encode(fault)
 	if !justInner {
 		io.WriteString(&buf, soapEnvelopeFooter)
@@ -950,10 +950,51 @@ func newXMLDecoder(r io.Reader) *xml.Decoder {
 // SOAPFault fault
 type SOAPFault struct {
 	XMLName xml.Name `xml:"http://schemas.xmlsoap.org/soap/envelope/ Fault"`
-	Code    string   `xml:"faultcode,omitempty"`
-	String  string   `xml:"faultstring,omitempty"`
+	Code    string   `xml:"faultcode"`
+	String  string   `xml:"faultstring"`
 	Actor   string   `xml:"faultactor,omitempty"`
 	Detail  string   `xml:"detail>ExceptionDetail,omitempty"`
+}
+
+func (f SOAPFault) MarshalXML(enc *xml.Encoder, st xml.StartElement) error {
+	st.Name.Space = "http://schemas.xmlsoap.org/soap/envelope/"
+	if strings.IndexByte(st.Name.Local, ':') < 0 {
+		st.Name.Local = "soapenv:" + st.Name.Local
+	}
+	for i := 0; i < len(st.Attr); i++ {
+		if a := st.Attr[i]; a.Name.Local == "xmlns" { // delete
+			st.Attr[i] = st.Attr[len(st.Attr)-1]
+			st.Attr = st.Attr[:len(st.Attr)-1]
+			i--
+		}
+	}
+	st.Attr = append(st.Attr, xml.Attr{Name: xml.Name{Local: "xmlns:soapenv"}, Value: "http://schemas.xmlsoap.org/soap/envelope/"})
+	var err error
+	E := func(tok xml.Token) error {
+		if err == nil {
+			err = enc.EncodeToken(tok)
+		}
+		return err
+	}
+	S := func(name, value string) error {
+		E(xml.StartElement{Name: xml.Name{Local: name}})
+		E(xml.CharData(value))
+		return E(xml.EndElement{Name: xml.Name{Local: name}})
+	}
+	E(st)
+	S("faultcode", f.Code)
+	S("faultstring", f.String)
+	if f.Actor != "" {
+		S("faultactor", f.Actor)
+	}
+	if f.Detail != "" {
+		E(xml.StartElement{Name: xml.Name{Local: "detail"}})
+		E(xml.StartElement{Name: xml.Name{Local: "ExceptionDetail"}})
+		E(xml.CharData(f.Detail))
+		E(xml.EndElement{Name: xml.Name{Local: "ExceptionDetail"}})
+		E(xml.EndElement{Name: xml.Name{Local: "detail"}})
+	}
+	return E(xml.EndElement{Name: st.Name})
 }
 
 func findOuterTag(b []byte) (start, end [2]int, ok bool) {
@@ -981,5 +1022,3 @@ func findOuterTag(b []byte) (start, end [2]int, ok bool) {
 	end[0], end[1] = off+j, off+j+2+len(tag)+1
 	return start, end, true
 }
-
-// vim: set fileencoding=utf-8 noet:
