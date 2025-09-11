@@ -237,7 +237,7 @@ func (h soapHandler) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		h.LogRequest(ctx, buf.String(), err)
 	}
 	if err != nil {
-		logger.Error("call", request.Action, "inp", fmt.Sprintf("%+v", inp), "error", err)
+		logger.Error("call", "action", request.Action, "inp", fmt.Sprintf("%+v", inp), "error", err)
 		soapError(w, err)
 		return
 	}
@@ -670,7 +670,7 @@ func mayFilterEmptyTags(r *http.Request, logger *slog.Logger) {
 		defer bufPool.Put(buf)
 		buf.Reset()
 		if err := FilterEmptyTags(buf, io.TeeReader(r.Body, save)); err != nil {
-			logger.Info("FilterEmptyTags", save.String(), "error", err)
+			logger.Info("FilterEmptyTags", "read", save.String(), "error", err)
 			r.Body = struct {
 				io.Reader
 				io.Closer
@@ -957,9 +957,12 @@ type SOAPFault struct {
 }
 
 func (f SOAPFault) MarshalXML(enc *xml.Encoder, st xml.StartElement) error {
-	st.Name.Space = "http://schemas.xmlsoap.org/soap/envelope/"
-	if strings.IndexByte(st.Name.Local, ':') < 0 {
-		st.Name.Local = "soapenv:" + st.Name.Local
+	// st.Name.Space = "http://schemas.xmlsoap.org/soap/envelope/"
+	st.Name.Space = ""
+	if i := strings.IndexByte(st.Name.Local, ':'); i < 0 {
+		st.Name.Local = "soapenv:Fault"
+	} else if st.Name.Local[i:] != ":Fault" {
+		st.Name.Local = st.Name.Local[:i+1] + "Fault"
 	}
 	for i := 0; i < len(st.Attr); i++ {
 		if a := st.Attr[i]; a.Name.Local == "xmlns" { // delete
@@ -968,7 +971,7 @@ func (f SOAPFault) MarshalXML(enc *xml.Encoder, st xml.StartElement) error {
 			i--
 		}
 	}
-	st.Attr = append(st.Attr, xml.Attr{Name: xml.Name{Local: "xmlns:soapenv"}, Value: "http://schemas.xmlsoap.org/soap/envelope/"})
+	// st.Attr = append(st.Attr, xml.Attr{Name: xml.Name{Local: "xmlns:soapenv"}, Value: "http://schemas.xmlsoap.org/soap/envelope/"})
 	var err error
 	E := func(tok xml.Token) error {
 		if err == nil {

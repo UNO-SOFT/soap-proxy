@@ -257,4 +257,19 @@ func TestRemoveNS(t *testing.T) {
 	}
 }
 
-// vim: set fileencoding=utf-8 noet:
+func TestEncodeFault(t *testing.T) {
+	fault := SOAPFault{
+		Code: "042", String: "ErRor", Actor: "Dwayne Johnson",
+		Detail: "Scorpion king",
+	}
+	var buf strings.Builder
+	err := xml.NewEncoder(&buf).Encode(fault)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log(buf.String())
+	if got, want := buf.String(), `<soapenv:Fault><faultcode>042</faultcode><faultstring>ErRor</faultstring><faultactor>Dwayne Johnson</faultactor><detail><ExceptionDetail>Scorpion king</ExceptionDetail></detail></soapenv:Fault>`; got != want {
+		t.Errorf("got %s\nwanted %s", got, want)
+	}
+}
