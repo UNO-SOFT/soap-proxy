@@ -269,7 +269,7 @@ func TestEncodeFault(t *testing.T) {
 	}
 
 	t.Log(buf.String())
-	if got, want := buf.String(), `<soapenv:Fault><faultcode>042</faultcode><faultstring>ErRor</faultstring><faultactor>Dwayne Johnson</faultactor><detail><ExceptionDetail>Scorpion king</ExceptionDetail></detail></soapenv:Fault>`; got != want {
+	if got, want := buf.String(), `<soapenv:Fault xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"><faultcode>042</faultcode><faultstring>ErRor</faultstring><faultactor>Dwayne Johnson</faultactor><detail><ExceptionDetail>Scorpion king</ExceptionDetail></detail></soapenv:Fault>`; got != want {
 		t.Errorf("got %s\nwanted %s", got, want)
 	}
 }

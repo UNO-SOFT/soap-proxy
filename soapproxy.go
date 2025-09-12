@@ -256,15 +256,16 @@ type requestInfo struct {
 func (info requestInfo) Name() string { return info.Action }
 
 const (
-	soapEnvelopeHeader = xml.Header + `
-<soapenv:Envelope
-	xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+	prefix             = "soapenv"
+	soapEnvelopeURI    = "http://schemas.xmlsoap.org/soap/envelope/"
+	soapEnvelopeHeader = xml.Header + `<` + prefix + `:Envelope
+	xmlns:` + prefix + `=soapEnvelopeURI
 	xmlns:xsi="http://www.w3.org/1999/XMLSchema-instance"
 	xmlns:xsd="http://www.w3.org/1999/XMLSchema"
-	soapenv:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
+	` + prefix + `:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
 `
 	soapEnvelopeFooter = `
-</soapenv:Body></soapenv:Envelope>`
+</` + prefix + `:Body></` + prefix + `:Envelope>`
 )
 
 func (h soapHandler) encodeResponse(ctx context.Context, w http.ResponseWriter, recv grpcer.Receiver, request requestInfo) {
@@ -285,9 +286,9 @@ func (h soapHandler) encodeResponse(ctx context.Context, w http.ResponseWriter, 
 	defer bufPool.Put(buf)
 	if request.EncodeHeader != nil {
 		buf.Reset()
-		buf.WriteString("<soapenv:Header>\n")
+		buf.WriteString("<" + prefix + ":Header>\n")
 		hdrErr := request.EncodeHeader(ctx, buf, recvErr)
-		buf.WriteString("</soapenv:Header>\n")
+		buf.WriteString("</" + prefix + ":Header>\n")
 		if hdrErr != nil {
 			logger.Error("EncodeHeader", "error", hdrErr)
 		} else {
@@ -295,7 +296,7 @@ func (h soapHandler) encodeResponse(ctx context.Context, w http.ResponseWriter, 
 			w.Write(buf.Bytes())
 		}
 	}
-	io.WriteString(w, "<soapenv:Body>\n")
+	io.WriteString(w, "<"+prefix+":Body>\n")
 	defer func() { io.WriteString(w, soapEnvelopeFooter) }()
 
 	if recvErr != nil {
@@ -729,15 +730,15 @@ func encodeSoapFault(w http.ResponseWriter, err error, justInner bool) error {
 		}
 	}
 	if fault.Code == "" {
-		fault.Code = "soapenv:Server"
+		fault.Code = prefix + ":Server"
 		if code < 500 {
-			fault.Code = "soapenv:Client"
+			fault.Code = prefix + ":Client"
 		}
 	}
 	w.Header().Set("Content-Type", textXML)
 	var buf bytes.Buffer
 	if !justInner {
-		io.WriteString(&buf, soapEnvelopeHeader+`<soapenv:Body>`)
+		io.WriteString(&buf, soapEnvelopeHeader+"<"+prefix+":Body>")
 	}
 
 	err = xml.NewEncoder(&buf).Encode(fault)
@@ -778,9 +779,9 @@ func findSoapElt(name string, dec *xml.Decoder) (xml.StartElement, error) {
 		if st, ok = tok.(xml.StartElement); ok {
 			if strings.EqualFold(st.Name.Local, name) {
 				switch st.Name.Space {
-				case "", "SOAP-ENV", "soapenv",
+				case "", "SOAP-ENV", prefix,
 					"http://www.w3.org/2003/05/soap-envelope/",
-					"http://schemas.xmlsoap.org/soap/envelope/":
+					soapEnvelopeURI:
 					return st, nil
 				}
 			}
@@ -949,7 +950,7 @@ func newXMLDecoder(r io.Reader) *xml.Decoder {
 
 // SOAPFault fault
 type SOAPFault struct {
-	XMLName xml.Name `xml:"http://schemas.xmlsoap.org/soap/envelope/ Fault"`
+	XMLName xml.Name `xml:"Fault"`
 	Code    string   `xml:"faultcode"`
 	String  string   `xml:"faultstring"`
 	Actor   string   `xml:"faultactor,omitempty"`
@@ -957,10 +958,9 @@ type SOAPFault struct {
 }
 
 func (f SOAPFault) MarshalXML(enc *xml.Encoder, st xml.StartElement) error {
-	// st.Name.Space = "http://schemas.xmlsoap.org/soap/envelope/"
 	st.Name.Space = ""
 	if i := strings.IndexByte(st.Name.Local, ':'); i < 0 {
-		st.Name.Local = "soapenv:Fault"
+		st.Name.Local = prefix + ":Fault"
 	} else if st.Name.Local[i:] != ":Fault" {
 		st.Name.Local = st.Name.Local[:i+1] + "Fault"
 	}
@@ -971,7 +971,10 @@ func (f SOAPFault) MarshalXML(enc *xml.Encoder, st xml.StartElement) error {
 			i--
 		}
 	}
-	// st.Attr = append(st.Attr, xml.Attr{Name: xml.Name{Local: "xmlns:soapenv"}, Value: "http://schemas.xmlsoap.org/soap/envelope/"})
+	st.Attr = append(st.Attr, xml.Attr{
+		Name:  xml.Name{Local: "xmlns:" + prefix},
+		Value: soapEnvelopeURI,
+	})
 	var err error
 	E := func(tok xml.Token) error {
 		if err == nil {
