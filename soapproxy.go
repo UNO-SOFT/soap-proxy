@@ -259,7 +259,7 @@ const (
 	prefix             = "soapenv"
 	soapEnvelopeURI    = "http://schemas.xmlsoap.org/soap/envelope/"
 	soapEnvelopeHeader = xml.Header + `<` + prefix + `:Envelope
-	xmlns:` + prefix + "=" + soapEnvelopeURI + `
+	xmlns:` + prefix + `="` + soapEnvelopeURI + `"
 	xmlns:xsi="http://www.w3.org/1999/XMLSchema-instance"
 	xmlns:xsd="http://www.w3.org/1999/XMLSchema"
 	` + prefix + `:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
