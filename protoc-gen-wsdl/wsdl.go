@@ -1,4 +1,4 @@
-// Copyright 2017, 2021 Tamás Gulácsi
+// Copyright 2017, 2025 Tamás Gulácsi
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -464,16 +464,30 @@ func (t *typer) mkType(fullName string, m *descriptorpb.DescriptorProto, documen
 	newFields := func(name string, fields []*descriptorpb.FieldDescriptorProto) Fields {
 		ff := filterHiddenFields(fields)
 		fs := Fields{Name: name, Fields: make([]Field, len(ff))}
-		sName := name
+		sName1 := name
+		sName2 := sName1
 		if pkg, rest, ok := strings.Cut(name, "_"); ok {
-			sName = "." + unCamelCase(pkg) + "." + rest
+			sName1 = "." + unCamelCase(pkg) + "." + rest
+			sName2 = "." + unCamelCase(pkg) + "." + pkg + "_" + rest
 		}
 		for i, f := range ff {
-			fld := Field{FieldDescriptorProto: f, Documentation: documentation[sName+"."+f.GetName()]}
-			// if fld.Documentation == "" && len(documentation) != 0 {
-			// 	slog.Info("xsdTypeFromDocu", "field", sName+"."+f.GetName(), "docu", fld.Documentation,
-			// 		"have", slices.Collect(maps.Keys(documentation)))
-			// }
+			nm := f.GetName()
+			fld := Field{FieldDescriptorProto: f, Documentation: documentation[sName1+"."+nm]}
+			if fld.Documentation == "" {
+				fld.Documentation = documentation[sName2+"."+nm]
+			}
+			if fld.Documentation == "" && len(documentation) != 0 {
+				have := make([]string, 0, 8)
+				for k := range documentation {
+					if strings.HasSuffix(k, nm) {
+						have = append(have, k)
+					}
+					if len(have) == cap(have) {
+						break
+					}
+				}
+				slog.Info("xsdTypeFromDocu", "sName1", sName1, "sName2", sName2, "field", nm, "have", have)
+			}
 			if xt := xsdTypeFromDocu(fld.Documentation); xt.Name != "" {
 				fld.XSDTypeName = xt.Name
 			}
