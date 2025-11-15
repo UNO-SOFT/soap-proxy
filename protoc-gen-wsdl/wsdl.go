@@ -4,6 +4,8 @@
 
 package main
 
+import "maps"
+
 // nosemgrep: go.lang.security.audit.xss.import-text-template.import-text-template
 import (
 	"bytes"
@@ -229,7 +231,6 @@ func Generate(p *protogen.Plugin) error {
 
 	now := time.Now()
 	for _, root := range roots {
-		root := root
 		pkg := root.GetName()
 		for svcNo, svc := range root.GetService() {
 			methods := svc.GetMethod()
@@ -244,9 +245,7 @@ func Generate(p *protogen.Plugin) error {
 				Documentation:          make(map[string]string),
 				RestrictedTypes:        restrictedTypes,
 			}
-			for k, v := range fieldDocs {
-				data.Documentation[k] = v
-			}
+			maps.Copy(data.Documentation, fieldDocs)
 			if si := root.GetSourceCodeInfo(); si != nil {
 				for _, loc := range si.GetLocation() {
 					if path := loc.GetPath(); len(path) == 4 && path[0] == 6 && path[1] == int32(svcNo) && path[2] == 2 {
@@ -320,7 +319,7 @@ var WSDLgz []byte`,
 	return nil
 }
 
-var bufPool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]byte, 0, 4096)) }}
+var bufPool = sync.Pool{New: func() any { return bytes.NewBuffer(make([]byte, 0, 4096)) }}
 
 var elementTypeTemplate = template.Must(
 	template.New("elementType").

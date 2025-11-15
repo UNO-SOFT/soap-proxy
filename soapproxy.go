@@ -27,6 +27,7 @@ import (
 	"io"
 	"log"
 	"log/slog"
+	"maps"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -55,8 +56,8 @@ type SOAPHandlerConfig struct {
 	grpcer.Client `json:"-"`
 	*slog.Logger  `json:"-"`
 	GetLogger     func(ctx context.Context) *slog.Logger
-	DecodeInput   func(*string, *xml.Decoder, *xml.StartElement) (interface{}, error)                                                            `json:"-"`
-	EncodeOutput  func(*xml.Encoder, interface{}) error                                                                                          `json:"-"`
+	DecodeInput   func(*string, *xml.Decoder, *xml.StartElement) (any, error)                                                                    `json:"-"`
+	EncodeOutput  func(*xml.Encoder, any) error                                                                                                  `json:"-"`
 	DecodeHeader  func(context.Context, *xml.Decoder, *xml.StartElement) (context.Context, func(context.Context, io.Writer, error) error, error) `json:"-"`
 	LogRequest    func(context.Context, string, error)
 	WSDL          string
@@ -138,9 +139,7 @@ func NewSOAPHandler(config SOAPHandlerConfig) soapHandler {
 						if h.annotations == nil {
 							h.annotations = m
 						} else {
-							for k, v := range m {
-								h.annotations[k] = v
-							}
+							maps.Copy(h.annotations, m)
 						}
 					}
 				}
@@ -168,7 +167,7 @@ type Annotation struct {
 	RemoveNS bool
 }
 
-func (h soapHandler) Input(name string) interface{} {
+func (h soapHandler) Input(name string) any {
 	if inp := h.Client.Input(name); inp != nil {
 		return inp
 	}
@@ -178,7 +177,7 @@ func (h soapHandler) Input(name string) interface{} {
 	return nil
 }
 
-var bufPool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]byte, 0, 1024)) }}
+var bufPool = sync.Pool{New: func() any { return bytes.NewBuffer(make([]byte, 0, 1024)) }}
 
 func (h soapHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	gzhttp.GzipHandler(http.HandlerFunc(h.serveHTTP)).ServeHTTP(w, r)
@@ -504,7 +503,7 @@ func (ss sliceSaver) Close() error {
 	return nil
 }
 
-func (ss sliceSaver) Encode(name string, value interface{}) error {
+func (ss sliceSaver) Encode(name string, value any) error {
 	ss.buf.Reset()
 	err := ss.enc.EncodeElement(value, xml.StartElement{Name: xml.Name{Local: name}})
 	if err != nil {
@@ -528,7 +527,7 @@ var (
 	errDecode = errors.New("decode XML")
 )
 
-func (h soapHandler) DecodeRequest(ctx context.Context, r *http.Request) (grpcer.RequestInfo, interface{}, error) {
+func (h soapHandler) DecodeRequest(ctx context.Context, r *http.Request) (grpcer.RequestInfo, any, error) {
 	logger := h.getLogger(ctx)
 
 	sr, err := iohlp.MakeSectionReader(r.Body, 1<<20)
@@ -605,7 +604,7 @@ func (h soapHandler) DecodeRequest(ctx context.Context, r *http.Request) (grpcer
 	if request.Action == "" {
 		request.Action = st.Name.Local
 	}
-	var inp interface{}
+	var inp any
 	if h.DecodeInput != nil {
 		inp, err := h.DecodeInput(&request.Action, dec, &st)
 		if err != nil {

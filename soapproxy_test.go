@@ -139,7 +139,7 @@ func TestXMLDecode(t *testing.T) {
 type nullClient struct{}
 
 func (n nullClient) List() []string { return nil }
-func (n nullClient) Input(name string) interface{} {
+func (n nullClient) Input(name string) any {
 	switch name {
 	case "Login":
 		var x struct{ PLoginNev, PJelszo string }
@@ -147,7 +147,7 @@ func (n nullClient) Input(name string) interface{} {
 	}
 	return nil
 }
-func (n nullClient) Call(name string, ctx context.Context, input interface{}, opts ...grpc.CallOption) (grpcer.Receiver, error) {
+func (n nullClient) Call(name string, ctx context.Context, input any, opts ...grpc.CallOption) (grpcer.Receiver, error) {
 	return nil, nil
 }
 

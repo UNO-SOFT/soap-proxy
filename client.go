@@ -55,7 +55,7 @@ func SOAPCallWithHeaderClient(ctx context.Context,
 	client *http.Client,
 	destURL string,
 	customizeRequest func(req *http.Request), customizeResponse func(resp *http.Response),
-	action, soapHeader, reqBody string, resp interface{},
+	action, soapHeader, reqBody string, resp any,
 	logger *slog.Logger,
 ) error {
 	buf := bufPool.Get().(*bytes.Buffer)
@@ -189,7 +189,7 @@ func SOAPCallWithHeaderClient(ctx context.Context,
 func SOAPCallWithHeader(ctx context.Context,
 	destURL string,
 	customizeRequest func(*http.Request), customizeResponse func(*http.Response),
-	action, soapHeader, reqBody string, resp interface{},
+	action, soapHeader, reqBody string, resp any,
 	logger *slog.Logger,
 ) error {
 	return SOAPCallWithHeaderClient(ctx, nil,
@@ -199,7 +199,7 @@ func SOAPCallWithHeader(ctx context.Context,
 }
 
 // SOAPCall destURL with SOAPAction=action, decoding the response body into resp.
-func SOAPCall(ctx context.Context, destURL, action string, reqBody string, resp interface{}, logger *slog.Logger) error {
+func SOAPCall(ctx context.Context, destURL, action string, reqBody string, resp any, logger *slog.Logger) error {
 	return SOAPCallWithHeader(ctx, destURL, nil, nil, action, "", reqBody, resp, logger)
 }
 
