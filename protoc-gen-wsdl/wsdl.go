@@ -571,14 +571,19 @@ func mkXSDElement(f Field) string {
 		}
 		maxOccurs = "unbounded"
 	}
-	docu := f.Documentation
-	if docu != "" {
-		docu = "<!-- " + docu + " -->\n"
+	var buf strings.Builder
+	fmt.Fprintf(&buf, `<xs:element minOccurs="0" nillable="true" maxOccurs="%s" name="%s" type="%s"`,
+		maxOccurs, name, typ)
+	if f.Documentation != "" {
+		buf.WriteString(">\n<xs:annotation><xs:documentation>")
+		if err := xml.EscapeText(&buf, []byte(f.Documentation)); err != nil {
+			panic(err)
+		}
+		buf.WriteString("</xs:documentation></xs:annotation>\n</xs:element>")
+	} else {
+		buf.WriteString("/>")
 	}
-	return fmt.Sprintf(
-		`%s<xs:element minOccurs="0" nillable="true" maxOccurs="%s" name="%s" type="%s"/>`,
-		docu, maxOccurs, name, typ,
-	)
+	return buf.String()
 }
 
 var rOraType = regexp.MustCompile(`(?:^|\s*)(DATE|(?:INTEGER|NUMBER)(?:[(][0-9]+[)])?|(?:CHAR|VARCHAR2)[(][0-9]+[)]|NUMBER[(][0-9]+, *[0-9]+[)])$`)
