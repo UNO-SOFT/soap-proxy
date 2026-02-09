@@ -118,7 +118,7 @@ const wsdlTmpl = xml.Header + `<definitions
 	{{$docu := .Documentation}}
     {{range .GetMethod}}
     <operation name="{{.Name}}">
-	  {{if (ne "" (index $docu .GetName))}}<documentation><![CDATA[{{index $docu .GetName | xmlEscape}}]]></documentation>{{end}}
+	  {{if (ne "" (index $docu .GetName))}}{{index $docu .GetName | xmlComment}}{{end}}
       <soap:operation soapAction="{{$.TargetNS}}{{.GetName}}" style="document" />
       <input><soap:body use="literal"/></input>
       <output><soap:body use="literal"/></output>
@@ -146,7 +146,6 @@ func Generate(p *protogen.Plugin) error {
 	files := req.GetProtoFile()
 	roots := make(map[string]*descriptorpb.FileDescriptorProto, len(rootNames))
 	allTypes := make(map[string]*descriptorpb.DescriptorProto, 1024)
-	var found int
 	fieldDocs := make(map[string]string)
 	restrictedTypes := make(map[string]XSDType)
 	for i := len(files) - 1; i >= 0; i-- {
@@ -160,10 +159,46 @@ func Generate(p *protogen.Plugin) error {
 			allTypes[dotPkg+"."+m.GetName()] = m
 		}
 		slog.Debug("beforeSourceCodeInfo", "allTypes", allTypes)
+
+		// Identifies which part of the FileDescriptorProto was defined at this
+		// location.
+		//
+		// Each element is a field number or an index.  They form a path from
+		// the root FileDescriptorProto to the place where the definition appears.
+		// For example, this path:
+		//
+		//	[ 4, 3, 2, 7, 1 ]
+		//
+		// refers to:
+		//
+		//	file.message_type(3)  // 4, 3
+		//	    .field(7)         // 2, 7
+		//	    .name()           // 1
+		//
+		// This is because FileDescriptorProto.message_type has field number 4:
+		//
+		//	repeated DescriptorProto message_type = 4;
+		//
+		// and DescriptorProto.field has field number 2:
+		//
+		//	repeated FieldDescriptorProto field = 2;
+		//
+		// and FieldDescriptorProto.name has field number 1:
+		//
+		//	optional string name = 1;
+		//
+		// Thus, the above path gives the location of a field name.  If we removed
+		// the last element:
+		//
+		//	[ 4, 3, 2, 7 ]
+		//
+		// this path refers to the whole field declaration (from the beginning
+		// of the label to the terminating semicolon).
+
 		if si := f.GetSourceCodeInfo(); si != nil {
 			for _, loc := range si.GetLocation() {
-				if path := loc.GetPath(); len(path) >= 4 && path[0] == 4 && path[2] == 2 {
-					if s := strings.TrimSpace(loc.GetLeadingComments()); s != "" {
+				if s := strings.TrimSpace(loc.GetLeadingComments()); s != "" {
+					if path := loc.GetPath(); len(path) >= 4 && path[0] == 4 && path[2] == 2 {
 						m := msgs[int(path[1])]
 						fieldDocs["."+pkg+"."+m.GetName()+"."+m.GetField()[int(path[3])].GetName()] = s
 						if _, ok := restrictedTypes[s]; !ok {
@@ -173,21 +208,25 @@ func Generate(p *protogen.Plugin) error {
 								}
 							}
 						}
+					} else if len(path) >= 4 && path[0] == 6 && path[2] == 2 {
+						// m := msgs[int(path[3])]
+						// slog.Info("docu", "path", path, "msg", m)
+					} else if len(path) == 2 && path[0] == 4 {
+						// slog.Info("docu", "path", path, "comments", s)
+					} else {
+						// slog.Info("docu", "path", path, "comments", s)
 					}
 				}
 			}
 		}
-		if found == len(rootNames) {
-			continue
-		}
 		for _, root := range rootNames {
 			if f.GetName() == root {
 				roots[root] = files[i]
-				found++
 				break
 			}
 		}
 	}
+	// slog.Info("roots", "names", rootNames, "roots", roots)
 
 	msgTypes := make(map[string]*descriptorpb.DescriptorProto, len(allTypes))
 	for _, root := range roots {
@@ -209,6 +248,7 @@ func Generate(p *protogen.Plugin) error {
 			"mkTypeName": mkTypeName,
 			"mkType":     (&typer{Types: allTypes}).mkType,
 			"xmlEscape":  xmlEscape,
+			"xmlComment": xmlComment,
 		}).
 		Parse(wsdlTmpl))
 
@@ -249,7 +289,7 @@ func Generate(p *protogen.Plugin) error {
 			if si := root.GetSourceCodeInfo(); si != nil {
 				for _, loc := range si.GetLocation() {
 					if path := loc.GetPath(); len(path) == 4 && path[0] == 6 && path[1] == int32(svcNo) && path[2] == 2 {
-						s := strings.TrimPrefix(strings.Replace(loc.GetLeadingComments(), "\n/", "\n", -1), "/")
+						s := strings.TrimPrefix(strings.ReplaceAll(loc.GetLeadingComments(), "\n/", "\n"), "/")
 
 						const nsEq = "REPLACE namespace=\""
 						if i := strings.Index(s, nsEq); i >= 0 {
@@ -265,6 +305,9 @@ func Generate(p *protogen.Plugin) error {
 							}
 						}
 						data.Documentation[methods[int(path[3])].GetName()] = s
+						// slog.Info("docu", "method", methods[int(path[3])].GetName(), "docu", s)
+					} else {
+						// slog.Info("docu", "path", path, "s", loc.GetLeadingComments())
 					}
 				}
 			}
@@ -485,7 +528,7 @@ func (t *typer) mkType(fullName string, m *descriptorpb.DescriptorProto, documen
 						break
 					}
 				}
-				slog.Info("xsdTypeFromDocu", "sName1", sName1, "sName2", sName2, "field", nm, "have", have)
+				slog.Debug("xsdTypeFromDocu", "sName1", sName1, "sName2", sName2, "field", nm, "have", have)
 			}
 			if xt := xsdTypeFromDocu(fld.Documentation); xt.Name != "" {
 				fld.XSDTypeName = xt.Name
@@ -798,10 +841,18 @@ func unCamelCase(s string) string {
 }
 
 func xmlEscape(s string) string {
-	var buf bytes.Buffer
+	var buf strings.Builder
 	if err := xml.EscapeText(&buf, []byte(s)); err != nil {
 		panic(err)
 	}
+	return buf.String()
+}
+
+func xmlComment(s string) string {
+	var buf strings.Builder
+	buf.WriteString("<!--\n")
+	buf.WriteString(strings.ReplaceAll(s, "--", "=="))
+	buf.WriteString("\n-->")
 	return buf.String()
 }
 
