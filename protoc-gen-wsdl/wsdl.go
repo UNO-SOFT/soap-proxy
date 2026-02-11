@@ -25,6 +25,7 @@ import (
 	"text/template"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/types/descriptorpb"
@@ -851,7 +852,18 @@ func xmlEscape(s string) string {
 func xmlComment(s string) string {
 	var buf strings.Builder
 	buf.WriteString("<!--\n")
-	buf.WriteString(strings.ReplaceAll(s, "--", "=="))
+	for _, r := range strings.ReplaceAll(s, "--", "==") {
+		// https://www.w3.org/TR/xml/#charsets
+		// #x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD] | [#x10000-#x10FFFF]	/* any Unicode character, excluding the surrogate blocks, FFFE, and FFFF. */
+		if r == 0x09 || r == 0x0a || r == 0x0d || 0x20 <= r && r <= 0xd7ff || 0xe000 <= r && r <= 0xfffd {
+			buf.WriteRune(r)
+		} else {
+			var a [4]byte
+			for _, b := range a[:utf8.EncodeRune(a[:], r)] {
+				fmt.Fprintf(&buf, "&#%x;", b)
+			}
+		}
+	}
 	buf.WriteString("\n-->")
 	return buf.String()
 }
