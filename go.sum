@@ -1,11 +1,9 @@
 aqwari.net/xml v0.0.0-20210331023308-d9421b293817 h1:+3Rh5EaTzNLnzWx3/uy/mAaH/dGI7svJ6e0oOIDcPuE=
 aqwari.net/xml v0.0.0-20210331023308-d9421b293817/go.mod h1:c7kkWzc7HS/t8Q2DcVY8P2d1dyWNEhEVT5pL0ZHO11c=
-github.com/UNO-SOFT/grpcer v0.12.0 h1:vP/+cG/ojbU8x/mBr4eOd3rG1tK9BWXGe7kNOq66yog=
-github.com/UNO-SOFT/grpcer v0.12.0/go.mod h1:jQbM+qxVbBC5ZZTM4J0O5nvhXkerReOb8fYM1LTdAbk=
 github.com/UNO-SOFT/grpcer v0.12.1-0.20260217181052-9cf81560a84d h1:lLrAkVLLzW4jtpW+fqMMqGLa9t2dCrHQgwN0j9KNEJw=
 github.com/UNO-SOFT/grpcer v0.12.1-0.20260217181052-9cf81560a84d/go.mod h1:BWvACcQsYQ/dZ4kpNkpXdF0osXrFwtE8p6+jWzkLWOs=
-github.com/UNO-SOFT/w3ctrace v0.0.0-20260217175826-54bb58dba989 h1:kL540Sut3yHmI3UxXazSblfdxWbntOW7OutGb/lAP3Q=
-github.com/UNO-SOFT/w3ctrace v0.0.0-20260217175826-54bb58dba989/go.mod h1:cEbGkAm1ly0TvCsra9TdM9GyK8MSEcnwmrBHjbCBVNQ=
+github.com/UNO-SOFT/w3ctrace v0.0.0-20260217182632-62e23a54a05a h1:1FXo62TGsgDRzSPpBaJwX/CsQ2A2vN+uVyLuRmFSJ8U=
+github.com/UNO-SOFT/w3ctrace v0.0.0-20260217182632-62e23a54a05a/go.mod h1:cEbGkAm1ly0TvCsra9TdM9GyK8MSEcnwmrBHjbCBVNQ=
 github.com/UNO-SOFT/zlog v0.8.6 h1:Y+XCa9O3mr4xDLTkyT2Fod60FsywKlqAexsdV5JUypo=
 github.com/UNO-SOFT/zlog v0.8.6/go.mod h1:ol94XTwk4pqVtBzcD/aiYh5+Lo+G2zF7izjMY7nWQBI=
 github.com/cespare/xxhash v1.1.0 h1:a6HrQnmkObjyL+Gs60czilIUGqrzKutQD6XZog3p+ko=
@@ -48,9 +46,6 @@ github.com/mattn/go-isatty v0.0.20 h1:xfD0iDuEKnDkl03q4limB+vH+GxLEtL/jb4xVJSWWE
 github.com/mattn/go-isatty v0.0.20/go.mod h1:W+V8PltTTMOvKvAeJH7IuucS94S2C6jfK/D7dTCTo3Y=
 github.com/mitchellh/mapstructure v1.5.0 h1:jeMsZIYE/09sWLaz43PL7Gy6RuMjD2eJVyuac5Z2hdY=
 github.com/mitchellh/mapstructure v1.5.0/go.mod h1:bFUtVrKA4DC2yAKiSyO/QUcy7e+RRV2QTWOzhPopBRo=
-github.com/oklog/ulid v1.3.1 h1:EGfNDEx6MqHz8B3uNV6QAib1UR2Lm97sHi3ocA6ESJ4=
-github.com/oklog/ulid/v2 v2.0.2 h1:r4fFzBm+bv0wNKNh5eXTwU7i85y5x+uwkxCUTNVQqLc=
-github.com/oklog/ulid/v2 v2.0.2/go.mod h1:mtBL0Qe/0HAx6/a4Z30qxVIAL1eQDweXq5lxOEiwQ68=
 github.com/oklog/ulid/v2 v2.1.1 h1:suPZ4ARWLOJLegGFiZZ1dFAkqzhMjL3J1TzI+5wHz8s=
 github.com/oklog/ulid/v2 v2.1.1/go.mod h1:rcEKHmBBKfef9DhnvX7y1HZBYxjXb0cP5ExxNsTT1QQ=
 github.com/pborman/getopt v0.0.0-20170112200414-7148bc3a4c30/go.mod h1:85jBQOZwpVEaDAr341tbn15RS4fCAsIst0qp7i8ex1o=
