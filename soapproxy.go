@@ -36,7 +36,7 @@ import (
 	"time"
 
 	"github.com/UNO-SOFT/grpcer"
-	// "github.com/UNO-SOFT/otel"
+	"github.com/UNO-SOFT/w3ctrace"
 	"github.com/klauspost/compress/gzhttp"
 	"github.com/tgulacsi/go/iohlp"
 
@@ -185,7 +185,7 @@ func (h soapHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (h soapHandler) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	ctx := r.Context()
-	// ctx := otel.ExtractHTTP(ctx, r.Header)
+	ctx = w3ctrace.NewContext(ctx, w3ctrace.ExtractHTTP(r))
 	logger := h.getLogger(ctx)
 	if r.Method == "GET" {
 		body := h.getWSDL()

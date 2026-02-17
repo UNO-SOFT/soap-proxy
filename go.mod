@@ -1,6 +1,6 @@
 module github.com/UNO-SOFT/soap-proxy
 
-go 1.25.0
+go 1.25.4
 
 require (
 	aqwari.net/xml v0.0.0-20210331023308-d9421b293817
@@ -17,6 +17,7 @@ require (
 )
 
 require (
+	github.com/UNO-SOFT/w3ctrace v0.0.0-20260217175826-54bb58dba989 // indirect
 	github.com/dgryski/go-linebreak v0.0.0-20180812204043-d8f37254e7d3 // indirect
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
@@ -24,6 +25,7 @@ require (
 	github.com/godror/knownpb v0.1.1 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
+	github.com/oklog/ulid/v2 v2.1.1 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/tgulacsi/go-xmlrpc v0.2.2 // indirect
 	golang.org/x/exp v0.0.0-20260212183809-81e46e3db34a // indirect
