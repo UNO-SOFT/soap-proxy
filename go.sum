@@ -2,6 +2,8 @@ aqwari.net/xml v0.0.0-20210331023308-d9421b293817 h1:+3Rh5EaTzNLnzWx3/uy/mAaH/dG
 aqwari.net/xml v0.0.0-20210331023308-d9421b293817/go.mod h1:c7kkWzc7HS/t8Q2DcVY8P2d1dyWNEhEVT5pL0ZHO11c=
 github.com/UNO-SOFT/grpcer v0.12.0 h1:vP/+cG/ojbU8x/mBr4eOd3rG1tK9BWXGe7kNOq66yog=
 github.com/UNO-SOFT/grpcer v0.12.0/go.mod h1:jQbM+qxVbBC5ZZTM4J0O5nvhXkerReOb8fYM1LTdAbk=
+github.com/UNO-SOFT/grpcer v0.12.1-0.20260217181052-9cf81560a84d h1:lLrAkVLLzW4jtpW+fqMMqGLa9t2dCrHQgwN0j9KNEJw=
+github.com/UNO-SOFT/grpcer v0.12.1-0.20260217181052-9cf81560a84d/go.mod h1:BWvACcQsYQ/dZ4kpNkpXdF0osXrFwtE8p6+jWzkLWOs=
 github.com/UNO-SOFT/w3ctrace v0.0.0-20260217175826-54bb58dba989 h1:kL540Sut3yHmI3UxXazSblfdxWbntOW7OutGb/lAP3Q=
 github.com/UNO-SOFT/w3ctrace v0.0.0-20260217175826-54bb58dba989/go.mod h1:cEbGkAm1ly0TvCsra9TdM9GyK8MSEcnwmrBHjbCBVNQ=
 github.com/UNO-SOFT/zlog v0.8.6 h1:Y+XCa9O3mr4xDLTkyT2Fod60FsywKlqAexsdV5JUypo=

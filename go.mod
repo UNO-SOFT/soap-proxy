@@ -4,7 +4,7 @@ go 1.25.4
 
 require (
 	aqwari.net/xml v0.0.0-20210331023308-d9421b293817
-	github.com/UNO-SOFT/grpcer v0.12.0
+	github.com/UNO-SOFT/grpcer v0.12.1-0.20260217181052-9cf81560a84d
 	github.com/UNO-SOFT/zlog v0.8.6
 	github.com/klauspost/compress v1.18.4
 	github.com/rogpeppe/retry v0.1.0
