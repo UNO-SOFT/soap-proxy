@@ -1,4 +1,4 @@
-// Copyright 2019, 2023 Tamás Gulácsi
+// Copyright 2019, 2026 Tamás Gulácsi
 //
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
@@ -37,6 +37,8 @@ import (
 
 	"github.com/UNO-SOFT/grpcer"
 	"github.com/UNO-SOFT/w3ctrace"
+	"github.com/UNO-SOFT/zlog/v2"
+
 	"github.com/klauspost/compress/gzhttp"
 	"github.com/tgulacsi/go/iohlp"
 
@@ -70,6 +72,9 @@ func (c SOAPHandlerConfig) getLogger(ctx context.Context) *slog.Logger {
 		if lgr := c.GetLogger(ctx); lgr != nil {
 			return lgr
 		}
+	}
+	if lgr := zlog.SFromContext(ctx); lgr != slog.Default() {
+		return lgr
 	}
 	return c.Logger
 }
@@ -185,8 +190,13 @@ func (h soapHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (h soapHandler) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	ctx := r.Context()
-	ctx = w3ctrace.NewContext(ctx, w3ctrace.ExtractHTTP(r))
 	logger := h.getLogger(ctx)
+	tr := w3ctrace.ExtractHTTP(r)
+	if tr.IsValid() {
+		logger = logger.With("reqID", tr.ShortString())
+		ctx = zlog.NewSContext(ctx, logger)
+	}
+	ctx = w3ctrace.NewContext(ctx, tr.Ensure())
 	if r.Method == "GET" {
 		body := h.getWSDL()
 		w.Header().Set("Content-Type", textXML)
