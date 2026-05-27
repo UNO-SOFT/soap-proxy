@@ -108,7 +108,7 @@ func SOAPCallWithHeaderClient(ctx context.Context,
 		response, err = client.Do(request)
 		dur = time.Since(start)
 		logger.Info("request",
-			slog.String("POST", destURL),
+			slog.String("POST", request.URL.Redacted()),
 			slog.Any("header", request.Header),
 			slog.String("reqHead", reqHead), slog.String("reqTail", reqTail),
 			slog.Int("tryCount", tryCount), slog.String("dur", dur.String()),
