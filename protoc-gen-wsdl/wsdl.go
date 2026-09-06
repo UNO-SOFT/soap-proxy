@@ -1,6 +1,6 @@
 // Copyright 2017, 2025 Tamás Gulácsi
 //
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: EUPL-1.2
 
 package main
 
